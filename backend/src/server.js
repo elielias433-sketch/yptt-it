@@ -5,7 +5,7 @@
  * Node.js HTTP server (no Firebase Functions runtime, no Blaze plan required).
  *
  * Responsibilities that remain server-side:
- *   - Firebase ID token verification via custom JWT verification
+ *   - Firebase ID token verification via Firebase Admin SDK verifyIdToken()
  *   - RBAC (reads = any verified user; mutations = admin only)
  *   - short-lived HMAC-SHA256 signed identity ticket issuance
  *   - forwarding to Apps Script
@@ -22,12 +22,44 @@ const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const admin = require('firebase-admin');
-const { verifyIdToken: joseVerify } = require('jose');
 
 const { handleRequest } = require('./gateway-core');
 
+/**
+ * Idempotent Firebase Admin initialization.
+ * Prefers FIREBASE_SERVICE_ACCOUNT (base64 of the service-account JSON).
+ * Falls back to Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS).
+ */
+function ensureFirebaseAdmin() {
+  if (admin.apps.length > 0) return admin.app();
+
+  const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (serviceAccountEnv) {
+    let credential;
+    try {
+      credential = JSON.parse(Buffer.from(serviceAccountEnv, 'base64').toString('utf8'));
+      return admin.initializeApp({
+        credential: admin.credential.cert(credential),
+        projectId: process.env.FIREBASE_PROJECT_ID || credential.project_id,
+      });
+    } catch (e) {
+      console.error('FIREBASE_SERVICE_ACCOUNT is invalid base64 or JSON.');
+      throw e;
+    }
+  }
+
+  // Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS path)
+  return admin.initializeApp({
+    projectId: process.env.FIREBASE_PROJECT_ID,
+  });
+}
+
 function buildApp(options = {}) {
   const app = options.app || express();
+
+  // Ensure Firebase Admin is initialized before any request is handled.
+  // This also covers the Vercel serverless adapter, which only calls buildApp().
+  ensureFirebaseAdmin();
 
   // Parse JSON bodies.
   app.use(express.json({ limit: '1mb' }));
@@ -51,42 +83,6 @@ function buildApp(options = {}) {
     res.setHeader('Referrer-Policy', 'no-referrer');
     next();
   });
-
-  // Custom Firebase ID token verification using jose + Google's public keys.
-  // This avoids reliance on Application Default Credentials (ADC) or a
-  // FIREBASE_SERVICE_ACCOUNT env var, which can be lost after process restarts.
-  async function verifyFirebaseIdToken(token) {
-    try {
-      // Fetch Google's OAuth2 public keys (X509 certificates).
-      // These certificates rotate periodically; fetching each request ensures
-      // we always use a valid key for RS256 signature verification.
-      const certsRes = await fetch('https://www.googleapis.com/oauth2/v1/certs');
-      if (!certsRes.ok) throw new Error('Failed to fetch Google certs');
-      const certs = await certsRes.json();
-
-      // Decode the token header to find the kid.
-      const headerB64 = token.split('.')[0];
-      const headerJson = JSON.parse(Buffer.from(headerB64, 'base64').toString());
-      const kid = headerJson.kid;
-      if (!kid) throw new Error('Token header missing kid');
-
-      // Find the matching certificate by kid.
-      const certPem = certs[kid];
-      if (!certPem) throw new Error(`No certificate found for kid: ${kid}`);
-
-      // Import the X509 certificate into jose format.
-      const publicKey = await jose.importX509(certPem, 'RS256');
-
-      // Verify the JWT using the imported key and RS256.
-      const { jwtVerify } = require('jose');
-      const payload = await jwtVerify(token, publicKey, { algorithms: ['RS256'] });
-
-      return payload.payload;
-    } catch (err) {
-      console.error('Custom verifyIdToken error:', err.message);
-      throw err;
-    }
-  }
 
   // Liveness + all API routes.
   app.use(async (req, res) => {
@@ -118,9 +114,7 @@ function buildApp(options = {}) {
 
     const result = await handleRequest({
       config: cfg,
-      // Use custom verification instead of admin.auth().verifyIdToken()
-      // which depends on ADC/FIREBASE_SERVICE_ACCOUNT that may be unavailable.
-      verifyIdToken: options.verifyIdToken || ((token) => verifyFirebaseIdToken(token)),
+      verifyIdToken: options.verifyIdToken || ((token) => admin.auth().verifyIdToken(token)),
       input: {
         method,
         path: pathname,
@@ -144,32 +138,7 @@ function buildApp(options = {}) {
 }
 
 function startServer() {
-  // --- Firebase Admin initialization via ADC / service account env ---
-  // Supports either GOOGLE_APPLICATION_CREDENTIALS (path) or
-  // FIREBASE_SERVICE_ACCOUNT (base64 of the JSON). Never logs the content.
-  // The Admin SDK is initialized but the verifyIdToken fallback above
-  // uses jose+Google certs so token verification works regardless of ADC.
-  if (!admin.apps.length) {
-    const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (serviceAccountEnv) {
-      let credential;
-      try {
-        credential = JSON.parse(Buffer.from(serviceAccountEnv, 'base64').toString('utf8'));
-        admin.initializeApp({
-          credential: admin.credential.cert(credential),
-          projectId: process.env.FIREBASE_PROJECT_ID || credential.project_id,
-        });
-      } catch (e) {
-        console.error('FIREBASE_SERVICE_ACCOUNT is invalid base64 or JSON.');
-        throw e;
-      }
-    } else {
-      // Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS path)
-      admin.initializeApp({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-      });
-    }
-  }
+  ensureFirebaseAdmin();
 
   const app = buildApp();
   const port = Number(process.env.PORT || 8080);
@@ -178,4 +147,10 @@ function startServer() {
   });
 }
 
-module.exports = { buildApp, startServer };
+module.exports = { buildApp, startServer, ensureFirebaseAdmin };
+
+// Start when run directly: node src/server.js
+if (require.main === module) {
+  // eslint-disable-next-line no-undef
+  startServer();
+}
