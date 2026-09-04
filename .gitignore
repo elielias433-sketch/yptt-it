@@ -1,0 +1,50 @@
+# ---------- Secrets & credentials (MUST NEVER BE COMMITTED) ----------
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+*.service-account.json
+*serviceAccount*.json
+*service-account*.json
+*SERVICE_ACCOUNT*
+*service_account*.json
+*-credential*.json
+*creds*.json
+firebase-debug.log
+firebase-debug.*.log
+*.pem
+*.key
+*.p12
+
+# ---------- Build & dependency artifacts ----------
+node_modules/
+dist/
+dist-ssr/
+build/
+*.local
+*.log
+
+# ---------- Firebase / CLI state ----------
+.firebase/
+*.cache
+
+# ---------- Firebase project binding template ----------
+# .firebaserc contains only a project ID placeholder; uncomment to also
+# ignore it if you prefer to keep the project binding out of VCS.
+# .firebaserc
+
+# ---------- Test / tooling artifacts ----------
+playwright-report/
+test-results/
+coverage/
+.nyc_output/
+
+# ---------- Editor / OS ----------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

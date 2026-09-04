@@ -1,0 +1,27 @@
+{
+  "name": "yptt-ti-tracker-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "YPTT TI Tracker — Self-hosted API Gateway. Verifies Firebase ID tokens, enforces RBAC, and forwards short-lived HMAC-SHA256 signed identity tickets to Apps Script. Replaces Firebase Cloud Functions gateway (Spark-plan compatible).",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "lint": "eslint .",
+    "test": "node --test tests/",
+    "test:unit": "node --test tests/gateway.test.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "firebase-admin": "^12.1.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  }
+}
