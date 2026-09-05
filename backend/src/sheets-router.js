@@ -150,6 +150,16 @@ async function listResource(resourceName, query = {}) {
   return { status: 200, body: exposeRows(sliced) };
 }
 
+/** List available site columns (all headers) from Site_SUL/KAL for the create form. */
+async function siteFields() {
+  const fields = {};
+  for (const [key, d] of [['sul', compat.resource(SUL)], ['kal', compat.resource(KAL)]]) {
+    const { headers } = await svc.readTab(process.env.SHEET_ID, d.legacyTab);
+    fields[key] = headers.map((h) => String(h || '').trim()).filter((h) => h !== '' && !/^no\.?$/i.test(h));
+  }
+  return { status: 200, body: fields };
+}
+
 async function getResourceById(resourceName, id) {
   const desc = compat.resource(resourceName);
   if (!desc) return { status: 404, body: { error: 'Unknown resource' } };
@@ -682,6 +692,7 @@ async function handlePath({ method, path, query, body }) {
       return { status: 404, body: { error: `Unknown resource: ${resourceName}` } };
     }
     const decodedId = (() => { try { return decodeURIComponent(id); } catch (e) { return id; } })();
+    if (resourceName === 'sites' && parts[2] === 'fields') return siteFields();
     if (id && parts[3] === 'related' && resourceName === 'sites') return siteRelated(decodedId);
     if (id) return getResourceById(resourceName, decodedId);
     return listResource(resourceName, query || {});
@@ -713,4 +724,5 @@ module.exports = {
   kpiTrends,
   kpiBreakdown,
   dashboardSulawesi,
+  siteFields,
 };
