@@ -8,7 +8,7 @@ function headerIndexes(headers) {
   const map = {};
   headers.forEach((h, i) => {
     const key = String(h || '').toLowerCase().trim();
-    if (key !== '' && !(key in map)) map[key] = i;
+    if (key !== '') map[key] = i; // last occurrence wins (Team List has 2 header blocks)
   });
   return map;
 }
@@ -87,7 +87,7 @@ const RESOURCES = {
   teams: {
     legacyTab: 'Team List',
     key: '',
-    allowedOps: ['READ'],
+    allowedOps: ['READ', 'CREATE'],
     fieldMap: {
       name: ['Name'], position: ['Position'], contact: ['Kontak'],
       email: ['Email'], regionCity: ['Region / City'],
@@ -97,7 +97,7 @@ const RESOURCES = {
   validations: {
     legacyTab: 'Validasi',
     key: '',
-    allowedOps: ['READ'],
+    allowedOps: ['READ', 'CREATE'],
     fieldMap: {
       zteZone: ['ZTE ZONE'], tiEngineer: ['TI Engineer'],
       status: ['Status SM ATP'], gapAnalysis: ['GAP Analysis'],

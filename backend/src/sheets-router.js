@@ -137,6 +137,24 @@ async function getResourceById(resourceName, id) {
   return { status: 404, body: { error: 'Not found' } };
 }
 
+/** Related data for a site detail page (materials from Inbound by site id). */
+async function siteRelated(wid) {
+  let materials = [];
+  try {
+    const desc = compat.resource('materials'); // maps to Inbound
+    if (desc) {
+      materials = await readCanonical(desc);
+      const w = String(wid || '').toLowerCase();
+      materials = materials.filter((r) =>
+        r.siteId && String(r.siteId).toLowerCase() === w);
+    }
+  } catch (e) { /* ignore */ }
+  return {
+    status: 200,
+    body: { materials, validations: [], milestones: [], assignments: [] },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // CREATE / UPDATE / DELETE
 // ---------------------------------------------------------------------------
@@ -173,8 +191,13 @@ async function createResource(resourceName, method, body = {}) {
   } catch (e) { /* audit best-effort */ }
 
   const { rows } = await svc.readTab(process.env.SHEET_ID, desc.legacyTab);
-  const canonical = compat.rowToCanonical(dname, headers, rows[rows.length - 1]);
-  return { status: 201, body: { ...canonical, tab: desc.legacyTab, created: true } };
+  // Resolve the exact appended sheet row from the API's updatedRange.
+  let rowIndex = rows.length; // fallback (last data row)
+  const m = String(updated?.updatedRange || '').split('!').pop().match(/(\d+)$/);
+  if (m) rowIndex = Number(m[1]);
+  const rawRow = rows[rowIndex - 2];
+  const canonical = rawRow ? compat.rowToCanonical(dname, headers, rawRow) : {};
+  return { status: 201, body: { ...canonical, tab: desc.legacyTab, rowIndex, created: true } };
 }
 
 async function updateResource(resourceName, method, id, body = {}) {
@@ -319,7 +342,9 @@ async function handlePath({ method, path, query, body }) {
     if (!compat.resource(resourceName) && !KNOWN.has(resourceName)) {
       return { status: 404, body: { error: `Unknown resource: ${resourceName}` } };
     }
-    if (id) return getResourceById(resourceName, id);
+    const decodedId = (() => { try { return decodeURIComponent(id); } catch (e) { return id; } })();
+    if (id && parts[3] === 'related' && resourceName === 'sites') return siteRelated(decodedId);
+    if (id) return getResourceById(resourceName, decodedId);
     return listResource(resourceName, query || {});
   }
 
