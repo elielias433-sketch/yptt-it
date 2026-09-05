@@ -72,9 +72,24 @@ export default function Sites() {
   const sites = data?.sites || [];
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / pageSize);
+
+  const countBy = (fn) => {
+    const map = {};
+    sites.forEach((s) => {
+      const k = fn(s) || 'Unknown';
+      map[k] = (map[k] || 0) + 1;
+    });
+    return map;
+  };
+  const byRegion = countBy((s) => s.region);
+  const byStatus = countBy((s) => s.status);
+  const byZone = countBy((s) => s.zone);
+  const byWorkType = countBy((s) => s.workType);
+  const byProgram = countBy((s) => s.program);
   const [editingSite, setEditingSite] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const [editSearch, setEditSearch] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -316,13 +331,16 @@ export default function Sites() {
               <Button variant="secondary" size="sm" onClick={() => setColumnsOpen(true)} leftIcon={<ViewColumnsIcon className="w-4 h-4" />}>
                 Columns
               </Button>
+              <Button variant="outline" size="sm" onClick={() => setSummaryOpen(true)} leftIcon={<BuildingOfficeIcon className="w-4 h-4" />}>
+                Site Summary
+              </Button>
             </div>
           </form>
         </CardBody>
       </Card>
 
       {/* Sites Table */}
-      <Card variant="elevated" className="overflow-hidden">
+      <Card variant="elevated" className="overflow-hidden zoom-card">
         <CardBody className="p-0">
           <Table striped hoverable>
             <TableHeader>
@@ -526,6 +544,46 @@ export default function Sites() {
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancel</Button>
             <Button variant="danger" onClick={confirmDelete}>Delete</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Site Summary Modal */}
+      <Modal
+        isOpen={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+        title="Site Summary"
+        size="lg"
+      >
+        <div className="pt-2 space-y-4">
+          <div className="flex items-center gap-3">
+            <p className="text-display-sm font-bold text-alien-100">{total.toLocaleString()}</p>
+            <Badge variant="info" size="sm">total items</Badge>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[
+              ['By Region', byRegion],
+              ['By Status', byStatus],
+              ['By Zone', byZone],
+              ['By Work Type', byWorkType],
+              ['By Program', byProgram],
+            ].map(([title, map]) => (
+              <div key={title} className="p-3 rounded-xl bg-alien-900/60 border border-alien-500/20">
+                <p className="text-caption text-alien-400 uppercase tracking-wide mb-2">{title}</p>
+                {Object.keys(map).length === 0 ? (
+                  <p className="text-body-sm text-alien-600">Belum ada data</p>
+                ) : (
+                  <ul className="space-y-1.5 max-h-64 overflow-y-auto">
+                    {Object.entries(map).map(([k, v]) => (
+                      <li key={k} className="flex items-center justify-between gap-2 text-body-sm">
+                        <span className="text-alien-200 truncate">{k}</span>
+                        <span className="font-mono text-alien-300 shrink-0">{v}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </Modal>
