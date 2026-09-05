@@ -13,6 +13,8 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { CubeIcon } from '@heroicons/react/24/outline';
 import { format } from 'date-fns';
+import { Modal } from '../components/ui/Modal';
+import { BuildingOfficeIcon } from '@heroicons/react/24/outline';
 
 const types = ['All', 'inbound', 'return', 'lom'];
 
@@ -35,6 +37,20 @@ export default function Materials() {
   const materials = data?.materials || [];
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / pageSize);
+
+  const countBy = (fn) => {
+    const map = {};
+    materials.forEach((m) => {
+      const k = fn(m) || 'Unknown';
+      map[k] = (map[k] || 0) + 1;
+    });
+    return map;
+  };
+  const byType = countBy((m) => m.type);
+  const byStatus = countBy((m) => m.status);
+  const bySite = countBy((m) => m.siteName);
+
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -163,6 +179,9 @@ export default function Materials() {
           <h1 className="page-header-title">Materials</h1>
           <p className="page-header-subtitle">Track materials, inbound logistics, and returns</p>
         </div>
+        <Button variant="outline" onClick={() => setSummaryOpen(true)} leftIcon={<BuildingOfficeIcon className="w-5 h-5" />}>
+          Material Summary
+        </Button>
       </div>
 
       <Card className="mb-6">
@@ -189,7 +208,7 @@ export default function Materials() {
         </CardBody>
       </Card>
 
-      <Card variant="elevated" className="overflow-hidden">
+      <Card variant="elevated" className="overflow-hidden zoom-card">
         <Table striped hoverable>
           <TableHeader>
             <TableRow>
@@ -238,6 +257,44 @@ export default function Materials() {
           onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
         />
       </Card>
+
+      {/* Material Summary Modal */}
+      <Modal
+        isOpen={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+        title="Material Summary"
+        size="lg"
+      >
+        <div className="pt-2 space-y-4">
+          <div className="flex items-center gap-3">
+            <p className="text-display-sm font-bold text-alien-100">{total.toLocaleString()}</p>
+            <Badge variant="info" size="sm">total materials</Badge>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[
+              ['By Type', byType],
+              ['By Status', byStatus],
+              ['By Site', bySite],
+            ].map(([title, map]) => (
+              <div key={title} className="p-3 rounded-xl bg-alien-900/60 border border-alien-500/20">
+                <p className="text-caption text-alien-400 uppercase tracking-wide mb-2">{title}</p>
+                {Object.keys(map).length === 0 ? (
+                  <p className="text-body-sm text-alien-600">Belum ada data</p>
+                ) : (
+                  <ul className="space-y-1.5 max-h-64 overflow-y-auto">
+                    {Object.entries(map).map(([k, v]) => (
+                      <li key={k} className="flex items-center justify-between gap-2 text-body-sm">
+                        <span className="text-alien-200 truncate">{k}</span>
+                        <span className="font-mono text-alien-300 shrink-0">{v}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
