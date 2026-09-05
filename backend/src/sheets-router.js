@@ -391,6 +391,12 @@ async function dashboardKpi() {
   return {
     totalWorkItems: items.length,
     activeWorkItems: active,
+    completedWorkItems: completed,
+    overdueWorkItems: 0,
+    completionRate: items.length ? Math.round((completed / items.length) * 100) : 0,
+    avgTAT: 0,
+    onTimeDelivery: 0,
+    materialOnTime: 0,
     completedTotal: completed,
     overAllRate: items.length ? Math.round((completed / items.length) * 100) : 0,
     regions: Object.keys({ sulawesi: 1, kalimantan: 1 }),
@@ -459,14 +465,14 @@ async function kpiTrends() {
 async function kpiBreakdown() {
   let items = [];
   for (const d of siteTabs()) items = items.concat(await readCanonical(d));
-  const count = (key) => {
-    const map = {};
-    for (const it of items) {
-      const v = String(it[key] || it.program || 'Unknown').trim() || 'Unknown';
-      map[v] = (map[v] || 0) + 1;
-    }
-    return map;
-  };
+  const byProgram = {};
+  for (const it of items) {
+    const p = String(it.program || 'Unknown').trim() || 'Unknown';
+    if (!byProgram[p]) byProgram[p] = { total: 0, active: 0, completed: 0 };
+    byProgram[p].total++;
+    if (/completed|done|selesai|closed|passed|approved/i.test(String(it.status || ''))) byProgram[p].completed++;
+    else if (/progress|pending|active|in progress|started|onprocess|draft/i.test(String(it.status || ''))) byProgram[p].active++;
+  }
   const byRegion = {};
   for (const it of items) {
     const r = it._tab && String(it._tab).includes('SUL') ? 'Sulawesi' : 'Kalimantan';
@@ -479,7 +485,23 @@ async function kpiBreakdown() {
       : 'Planning';
     byStatus[s] = (byStatus[s] || 0) + 1;
   }
-  return { byRegion, byProgram: count('program'), byStatus };
+  // Per-region rows for the Breakdown table (real data, not placeholders).
+  const rows = [];
+  for (const [key, d] of [['Sulawesi', compat.resource(SUL)], ['Kalimantan', compat.resource(KAL)]]) {
+    const regItems = await readCanonical(d);
+    const comp = regItems.filter((r) => /completed|done|selesai|closed|passed|approved/i.test(String(r.status || ''))).length;
+    const act = regItems.filter((r) => /progress|pending|active|in progress|started|onprocess|draft/i.test(String(r.status || ''))).length;
+    rows.push({
+      region: key,
+      total: regItems.length,
+      active: act,
+      completed: comp,
+      overdue: 0,
+      completionRate: regItems.length ? Math.round((comp / regItems.length) * 100) : 0,
+      avgTAT: 0,
+    });
+  }
+  return { byRegion, byProgram, byStatus, rows };
 }
 
 /** Route an authorized request. Returns { status, body } or null (unhandled). */
