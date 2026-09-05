@@ -10,6 +10,8 @@ import { Table, TableHeader, TableBody, TableRow, TableCell, TableHeaderCell, Ta
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
+import { Modal } from '../components/ui/Modal';
+import { BuildingOfficeIcon } from '@heroicons/react/24/outline';
 
 export default function Validations() {
   const [search, setSearch] = useState('');
@@ -26,6 +28,20 @@ export default function Validations() {
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / pageSize);
   const zones = data?.zones || ['Pare Pare', 'Makassar', 'Other'];
+
+  const countBy = (fn) => {
+    const map = {};
+    validations.forEach((v) => {
+      const k = fn(v) || 'Unknown';
+      map[k] = (map[k] || 0) + 1;
+    });
+    return map;
+  };
+  const byZone = countBy((v) => v.zteZone);
+  const byEngineer = countBy((v) => v.tiEngineer);
+  const bySmAtp = countBy((v) => v.smAtpStatus);
+
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -148,6 +164,9 @@ export default function Validations() {
           <h1 className="page-header-title">Validations</h1>
           <p className="page-header-subtitle">Track validation status across all zones</p>
         </div>
+        <Button variant="outline" onClick={() => setSummaryOpen(true)} leftIcon={<BuildingOfficeIcon className="w-5 h-5" />}>
+          Validation Summary
+        </Button>
       </div>
 
       <Card className="mb-6">
@@ -174,7 +193,7 @@ export default function Validations() {
         </CardBody>
       </Card>
 
-      <Card variant="elevated" className="overflow-hidden">
+      <Card variant="elevated" className="overflow-hidden zoom-card">
         <Table striped hoverable>
           <TableHeader>
             <TableRow>
@@ -223,6 +242,44 @@ export default function Validations() {
           onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
         />
       </Card>
+
+      {/* Validation Summary Modal */}
+      <Modal
+        isOpen={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+        title="Validation Summary"
+        size="lg"
+      >
+        <div className="pt-2 space-y-4">
+          <div className="flex items-center gap-3">
+            <p className="text-display-sm font-bold text-alien-100">{total.toLocaleString()}</p>
+            <Badge variant="info" size="sm">total validations</Badge>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[
+              ['By Zone', byZone],
+              ['By Engineer', byEngineer],
+              ['By SM ATP Status', bySmAtp],
+            ].map(([title, map]) => (
+              <div key={title} className="p-3 rounded-xl bg-alien-900/60 border border-alien-500/20">
+                <p className="text-caption text-alien-400 uppercase tracking-wide mb-2">{title}</p>
+                {Object.keys(map).length === 0 ? (
+                  <p className="text-body-sm text-alien-600">Belum ada data</p>
+                ) : (
+                  <ul className="space-y-1.5 max-h-64 overflow-y-auto">
+                    {Object.entries(map).map(([k, v]) => (
+                      <li key={k} className="flex items-center justify-between gap-2 text-body-sm">
+                        <span className="text-alien-200 truncate">{k}</span>
+                        <span className="font-mono text-alien-300 shrink-0">{v}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
