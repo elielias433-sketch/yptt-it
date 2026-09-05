@@ -181,21 +181,51 @@ async function getResourceById(resourceName, id) {
   return { status: 404, body: { error: 'Not found' } };
 }
 
-/** Related data for a site detail page (materials from Inbound by site id). */
+/** Related data for a site detail page (materials + validations joined). */
 async function siteRelated(wid) {
   let materials = [];
+  let validations = [];
   try {
-    const desc = compat.resource('materials'); // maps to Inbound
-    if (desc) {
-      materials = await readCanonical(desc);
+    // Fetch site detail to learn siteId + zone for joins.
+    const detail = await getResourceById('sites', wid);
+    const siteId = detail.body && detail.body.siteId;
+    const zone = detail.body && detail.body.zteZone;
+
+    // Materials from Inbound by Site ID (exact).
+    const mdesc = compat.resource('materials');
+    if (mdesc) {
+      materials = await readCanonical(mdesc);
+      if (siteId) {
+        const s = String(siteId).toLowerCase();
+        materials = materials.filter((r) => r.siteId && String(r.siteId).toLowerCase() === s);
+      }
+    }
+
+    // Validations: try exact WID, then Site ID, then zone fallback.
+    const vdesc = compat.resource('validations');
+    if (vdesc) {
+      const allValidations = await readCanonical(vdesc);
       const w = String(wid || '').toLowerCase();
-      materials = materials.filter((r) =>
-        r.siteId && String(r.siteId).toLowerCase() === w);
+      let byKey = allValidations.filter((r) => (r.wid && String(r.wid).toLowerCase().includes(w)));
+      if (byKey.length) {
+        validations = byKey;
+      } else if (siteId) {
+        const bySid = allValidations.filter((r) =>
+          r.siteId && String(r.siteId).toLowerCase() === String(siteId).toLowerCase());
+        validations = bySid.length ? bySid : allValidations;
+      } else {
+        validations = allValidations;
+      }
+      // If still nothing by key/site, fall back to zone.
+      if ((!byKey.length) && (!siteId || !allValidations.some((r) => r.siteId && String(r.siteId).toLowerCase() === String(siteId).toLowerCase())) && zone) {
+        validations = allValidations.filter((r) =>
+          r.zteZone && String(r.zteZone).toLowerCase() === String(zone).toLowerCase());
+      }
     }
   } catch (e) { /* ignore */ }
   return {
     status: 200,
-    body: { materials, validations: [], milestones: [], assignments: [] },
+    body: { materials, validations, milestones: [], assignments: [] },
   };
 }
 
@@ -515,10 +545,13 @@ async function kpiTrends(query) {
       if (/completed|done|selesai|closed|passed|approved/i.test(String(it.status || ''))) buckets[idx].done++;
     }
   }
-  return [
-    { label: 'WID Volume', data: buckets.map((b) => b.total), color: '#3b82f6' },
-    { label: 'Completion', data: buckets.map((b) => (b.total ? Math.round((b.done / b.total) * 100) : 0)), color: '#10b981' },
-  ];
+  return {
+    months: buckets.map((b) => b.label),
+    series: [
+      { label: 'WID Volume', data: buckets.map((b) => b.total), color: '#3b82f6' },
+      { label: 'Completion', data: buckets.map((b) => (b.total ? Math.round((b.done / b.total) * 100) : 0)), color: '#10b981' },
+    ],
+  };
 }
 
 /** KPI breakdown by region / program / status. */
@@ -593,6 +626,38 @@ async function kpiBreakdown(query) {
   return { byRegion, byProgram, byStatus, rows, monthly };
 }
 
+/** Read Dashboard_SULAWESI (Excel summary) tab into region blocks. */
+async function dashboardSulawesi() {
+  const res = await svc.getSheets().spreadsheets.values.get({
+    spreadsheetId: process.env.SHEET_ID,
+    range: 'Dashboard_SULAWESI!A1:G300',
+  });
+  const rows = res.data.values || [];
+  const out = {};
+  let current = null;
+  for (const r of rows) {
+    const idx = String(r[0] || '').trim();
+    if (/SUMMARY$/i.test(idx)) {
+      const name = idx.replace(/\s+SUMMARY.*/i, '').toLowerCase();
+      current = name;
+      out[name] = { rows: [] };
+      continue;
+    }
+    if (/^Milestone$/i.test(idx)) continue; // header
+    if (!current || idx === '') continue;
+    out[current].rows.push({
+      milestone: idx,
+      assignment: r[1] !== undefined ? r[1] : '',
+      plan: r[2] !== undefined ? r[2] : '',
+      ach: r[3] !== undefined ? r[3] : '',
+      delta: r[4] !== undefined ? r[4] : '',
+      pct: r[5] !== undefined ? String(r[5]) : '',
+      remarks: r[6] !== undefined ? String(r[6]) : '',
+    });
+  }
+  return out;
+}
+
 /** Route an authorized request. Returns { status, body } or null (unhandled). */
 async function handlePath({ method, path, query, body }) {
   const parts = path.split('/').filter(Boolean);
@@ -600,6 +665,7 @@ async function handlePath({ method, path, query, body }) {
 
   if (method === 'GET') {
     if (path.startsWith('/api/dashboard/summary')) return { status: 200, body: await dashboardSummary() };
+    if (path.startsWith('/api/dashboard/sulawesi')) return { status: 200, body: await dashboardSulawesi() };
     if (path.startsWith('/api/dashboard/regional')) return { status: 200, body: await dashboardRegional() };
     if (path.startsWith('/api/dashboard/kpi/trends')) return { status: 200, body: await kpiTrends(query || {}) };
     if (path.startsWith('/api/dashboard/kpi/breakdown')) return { status: 200, body: await kpiBreakdown(query || {}) };
@@ -646,4 +712,5 @@ module.exports = {
   dashboardWorkitems,
   kpiTrends,
   kpiBreakdown,
+  dashboardSulawesi,
 };

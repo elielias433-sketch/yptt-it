@@ -103,6 +103,7 @@ const RESOURCES = {
       zteZone: ['ZTE ZONE'], tiEngineer: ['TI Engineer'],
       status: ['Status SM ATP'], gapAnalysis: ['GAP Analysis'],
       dismantleStatus: ['Dismantle Status'], ldmStatus: ['Status LDM'],
+      siteId: ['Site ID'], wid: ['WID'],
     },
   },
 };
