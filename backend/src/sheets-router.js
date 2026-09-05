@@ -20,6 +20,14 @@ function siteTabs() {
   return [compat.resource(SUL), compat.resource(KAL)];
 }
 
+/** Region-aware tabs based on query.region (''=all, kal/sul). */
+function tabsForRegion(query) {
+  const r = String((query && query.region) || '').toLowerCase();
+  if (r.includes('kal')) return [compat.resource(KAL)];
+  if (r.includes('sul')) return [compat.resource(SUL)];
+  return siteTabs();
+}
+
 /** Which legacy tab (and resource descriptor) to write a site row to. */
 function resolveSiteTab(data) {
   const region = String(data.region || data.regionCity || '').toLowerCase();
@@ -383,9 +391,9 @@ async function dashboardRegional() {
   return out;
 }
 
-async function dashboardKpi() {
+async function dashboardKpi(query) {
   let items = [];
-  for (const d of siteTabs()) items = items.concat(await readCanonical(d));
+  for (const d of tabsForRegion(query)) items = items.concat(await readCanonical(d));
   const completed = items.filter((r) => /completed|done|selesai|closed|passed|approved/i.test(String(r.status || ''))).length;
   const active = items.filter((r) => /progress|pending|active|in progress|started|onprocess|draft/i.test(String(r.status || ''))).length;
   return {
@@ -432,9 +440,9 @@ function itemMonth(item) {
 }
 
 /** Monthly trend lines (for KPI Trends chart). */
-async function kpiTrends() {
+async function kpiTrends(query) {
   let items = [];
-  for (const d of siteTabs()) items = items.concat(await readCanonical(d));
+  for (const d of tabsForRegion(query)) items = items.concat(await readCanonical(d));
   const months = 6;
   const now = new Date();
   const buckets = [];
@@ -462,9 +470,9 @@ async function kpiTrends() {
 }
 
 /** KPI breakdown by region / program / status. */
-async function kpiBreakdown() {
+async function kpiBreakdown(query) {
   let items = [];
-  for (const d of siteTabs()) items = items.concat(await readCanonical(d));
+  for (const d of tabsForRegion(query)) items = items.concat(await readCanonical(d));
   const byProgram = {};
   for (const it of items) {
     const p = String(it.program || 'Unknown').trim() || 'Unknown';
@@ -487,7 +495,11 @@ async function kpiBreakdown() {
   }
   // Per-region rows for the Breakdown table (real data, not placeholders).
   const rows = [];
-  for (const [key, d] of [['Sulawesi', compat.resource(SUL)], ['Kalimantan', compat.resource(KAL)]]) {
+  const regionPairs = [
+    ['Sulawesi', compat.resource(SUL)],
+    ['Kalimantan', compat.resource(KAL)],
+  ].filter(([, d]) => tabsForRegion(query).includes(d));
+  for (const [key, d] of regionPairs) {
     const regItems = await readCanonical(d);
     const comp = regItems.filter((r) => /completed|done|selesai|closed|passed|approved/i.test(String(r.status || ''))).length;
     const act = regItems.filter((r) => /progress|pending|active|in progress|started|onprocess|draft/i.test(String(r.status || ''))).length;
@@ -512,9 +524,9 @@ async function handlePath({ method, path, query, body }) {
   if (method === 'GET') {
     if (path.startsWith('/api/dashboard/summary')) return { status: 200, body: await dashboardSummary() };
     if (path.startsWith('/api/dashboard/regional')) return { status: 200, body: await dashboardRegional() };
-    if (path.startsWith('/api/dashboard/kpi/trends')) return { status: 200, body: await kpiTrends() };
-    if (path.startsWith('/api/dashboard/kpi/breakdown')) return { status: 200, body: await kpiBreakdown() };
-    if (path.startsWith('/api/dashboard/kpi')) return { status: 200, body: await dashboardKpi() };
+    if (path.startsWith('/api/dashboard/kpi/trends')) return { status: 200, body: await kpiTrends(query || {}) };
+    if (path.startsWith('/api/dashboard/kpi/breakdown')) return { status: 200, body: await kpiBreakdown(query || {}) };
+    if (path.startsWith('/api/dashboard/kpi')) return { status: 200, body: await dashboardKpi(query || {}) };
     if (path.startsWith('/api/dashboard/workitems')) return { status: 200, body: await dashboardWorkitems({ query }) };
     if (path.startsWith('/api/dashboard/')) {
       const tally = await dashboardSummary();
