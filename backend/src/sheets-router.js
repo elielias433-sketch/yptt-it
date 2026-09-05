@@ -76,12 +76,32 @@ async function listResource(resourceName, query = {}) {
     for (const d of siteTabs()) rows = rows.concat(await readCanonical(d));
   }
 
+    // Decorate sites/workorders rows with region from source tab.
+  if (resourceName === 'sites' || resourceName === 'workorders') {
+    rows = rows.map((r) => ({
+      ...r,
+      region: r._tab && String(r._tab).toUpperCase().includes('KAL')
+        ? 'KAL'
+        : r._tab && String(r._tab).toUpperCase().includes('SUL')
+          ? 'SUL'
+          : (r.region || 'SUL'),
+    }));
+  }
+
   const CONTROL = new Set(['limit', 'offset', 'page', 'sort', 'order', 'sortField', 'sortOrder', 'search', 'tab']);
-  // Exact/partial filters (region, status, workType, ...)
+  // Explicit filters (region, status, workType, ...) with forgiving matching.
   for (const [k, v] of Object.entries(query)) {
     if (!v || CONTROL.has(k)) continue;
-    const key = String(v).toLowerCase();
-    rows = rows.filter((r) => (r[k] !== undefined && String(r[k]).toLowerCase().includes(key)));
+    const want = String(v).toLowerCase().trim();
+    rows = rows.filter((r) => {
+      const val = String(r[k] === undefined ? '' : r[k]).toLowerCase();
+      if (k === 'region') {
+        // KAL / SUL vs Kali / Sula / Sulawesi / etc.
+        return want === 'kal' ? val.includes('kal') : val.includes('sul');
+      }
+      if (!r[k] && ['status', 'workType'].includes(k)) return false;
+      return val.includes(want);
+    });
   }
   // Free-text search across important fields
   if (query.search) {
