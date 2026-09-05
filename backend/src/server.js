@@ -24,6 +24,9 @@ const cors = require('cors');
 const admin = require('firebase-admin');
 
 const { handleRequest } = require('./gateway-core');
+const sheetsRouter = require('./sheets-router');
+
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'DELETE']);
 
 /**
  * Idempotent Firebase Admin initialization.
@@ -111,6 +114,50 @@ function buildApp(options = {}) {
         .map((s) => s.trim())
         .filter(Boolean),
     };
+
+    // Direct-Sheets mode: when SHEET_ID is configured, handle /api/* locally
+    // via the service account (no Apps Script). Falls back to the Apps Script
+    // forwarding flow when SHEET_ID is not set (tests / legacy).
+    if (process.env.SHEET_ID && pathname.startsWith('/api/')) {
+      const idToken = (req.get('Authorization') || req.get('authorization') || '')
+        .replace(/^Bearer\s+/i, '')
+        .trim();
+      if (!idToken) {
+        res.status(401).setHeader('Content-Type', 'application/json');
+        res.send(JSON.stringify({ error: 'Authorization header with a valid ID token required' }));
+        return;
+      }
+      let decoded;
+      try {
+        decoded = await (options.verifyIdToken || ((t) => admin.auth().verifyIdToken(t)))(idToken);
+      } catch (e) {
+        res.status(401).setHeader('Content-Type', 'application/json');
+        res.send(JSON.stringify({ error: 'Invalid or expired ID token' }));
+        return;
+      }
+      const adminList = (options.adminUids || process.env.ADMIN_UIDS || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const isAdmin = decoded.admin === true || adminList.includes(decoded.uid);
+      if (MUTATING_METHODS.has(method) && !isAdmin) {
+        res.status(403).setHeader('Content-Type', 'application/json');
+        res.send(JSON.stringify({ error: 'Forbidden: admin role required for this operation' }));
+        return;
+      }
+      try {
+        const out = await sheetsRouter.handlePath({ method, path: pathname, query });
+        if (out) {
+          res.status(out.status).setHeader('Content-Type', 'application/json');
+          res.send(JSON.stringify(out.body));
+          return;
+        }
+      } catch (e) {
+        res.status(502).setHeader('Content-Type', 'application/json');
+        res.send(JSON.stringify({ error: 'Sheets data source error', detail: e.message }));
+        return;
+      }
+    }
 
     const result = await handleRequest({
       config: cfg,
