@@ -1,0 +1,419 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@config "../tailwind.config.js";
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-bg-primary: #020617;
+    --color-bg-secondary: #0c1222;
+    --color-bg-tertiary: #0f172a;
+    --color-surface-primary: #0f172a;
+    --color-surface-secondary: #1e293b;
+    --color-surface-tertiary: #1e3a5f;
+    --color-border-primary: #2563eb33;
+    --color-border-focus: #3b82f6;
+    --color-text-primary: #f1f5f9;
+    --color-text-secondary: #94a3b8;
+    --color-text-muted: #64748b;
+    --color-accent: #3b82f6;
+    --color-accent-glow: rgba(59, 130, 246, 0.4);
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    min-height: 100vh;
+    background-image: 
+      radial-gradient(ellipse at 20% 20%, rgba(59,130,246,0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 80%, rgba(6,182,212,0.06) 0%, transparent 50%);
+    background-attachment: fixed;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-bg-secondary);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-secondary);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-accent);
+  }
+  ::-webkit-scrollbar-corner {
+    background: var(--color-bg-secondary);
+  }
+
+  /* Selection */
+  ::selection {
+    background: rgba(59, 130, 246, 0.3);
+    color: var(--color-text-primary);
+  }
+
+  /* Focus visible */
+  :focus-visible {
+    outline: 2px solid var(--color-border-focus);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Alien Blue Card */
+  .alien-card {
+    @apply bg-alien-800/60 backdrop-blur-sm border border-alien-500/20 rounded-card shadow-card transition-all duration-300;
+  }
+  
+  .alien-card:hover {
+    @apply border-alien-400/40 shadow-card-hover;
+  }
+  
+  .alien-card-elevated {
+    @apply bg-alien-800/80 backdrop-blur-md border border-alien-500/30 rounded-card-lg shadow-glow-md;
+  }
+
+  /* Alien Blue Button Variants */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 text-body-md font-medium text-white 
+           bg-gradient-to-r from-alien-500 to-alien-600 rounded-xl 
+           shadow-glow-sm hover:shadow-glow-md
+           hover:from-alien-400 hover:to-alien-500
+           active:scale-[0.98] active:shadow-glow-sm
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:from-alien-500 disabled:hover:to-alien-600
+           transition-all duration-200;
+  }
+  
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 text-body-md font-medium text-alien-300
+           bg-alien-800/50 backdrop-blur-sm border border-alien-500/30 rounded-xl
+           hover:bg-alien-700/50 hover:border-alien-400/50 hover:text-alien-100 hover:shadow-glow-sm
+           active:scale-[0.98]
+           disabled:opacity-50 disabled:cursor-not-allowed
+           transition-all duration-200;
+  }
+  
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-body-md font-medium text-alien-400
+           rounded-xl hover:bg-alien-700/30 hover:text-alien-100
+           active:scale-[0.98]
+           disabled:opacity-50 disabled:cursor-not-allowed
+           transition-all duration-200;
+  }
+  
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 text-body-md font-medium text-white
+           bg-gradient-to-r from-red-600 to-red-700 rounded-xl
+           shadow-[0_0_8px_rgba(239,68,68,0.2)] hover:shadow-[0_0_16px_rgba(239,68,68,0.3)]
+           hover:from-red-500 hover:to-red-600
+           active:scale-[0.98]
+           disabled:opacity-50 disabled:cursor-not-allowed
+           transition-all duration-200;
+  }
+  
+  .btn-success {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 text-body-md font-medium text-white
+           bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-xl
+           shadow-[0_0_8px_rgba(16,185,129,0.2)] hover:shadow-[0_0_16px_rgba(16,185,129,0.3)]
+           hover:from-emerald-500 hover:to-emerald-600
+           active:scale-[0.98]
+           disabled:opacity-50 disabled:cursor-not-allowed
+           transition-all duration-200;
+  }
+
+  /* Alien Blue Input */
+  .alien-input {
+    @apply w-full px-4 py-3 text-body-md text-alien-100
+           bg-alien-900/50 backdrop-blur-sm
+           border border-alien-500/20 rounded-xl
+           placeholder:text-alien-500
+           focus:outline-none focus:ring-2 focus:ring-alien-500/50 focus:border-alien-500
+           disabled:opacity-50 disabled:cursor-not-allowed
+           transition-all duration-200;
+  }
+  
+  .alien-input-error {
+    @apply border-red-500/50 focus:ring-red-500/50 focus:border-red-500;
+  }
+
+  .alien-select {
+    @apply w-full px-4 py-3 text-body-md text-alien-100
+           bg-alien-900/50 backdrop-blur-sm
+           border border-alien-500/20 rounded-xl
+           placeholder:text-alien-500
+           focus:outline-none focus:ring-2 focus:ring-alien-500/50 focus:border-alien-500
+           disabled:opacity-50 disabled:cursor-not-allowed
+           transition-all duration-200
+           appearance-none bg-no-repeat
+           pr-10;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.75rem center;
+  }
+
+  /* Alien Blue Table */
+  .alien-table {
+    @apply w-full border-collapse;
+  }
+  
+  .alien-table th {
+    @apply px-4 py-3 text-left text-caption font-semibold text-alien-400 uppercase tracking-wider
+           border-b border-alien-500/20 bg-alien-900/30;
+  }
+  
+  .alien-table td {
+    @apply px-4 py-3 text-body-sm text-alien-100
+           border-b border-alien-500/10
+           transition-colors duration-150;
+  }
+  
+  .alien-table tbody tr {
+    @apply bg-alien-800/40 hover:bg-alien-700/30 transition-colors duration-150;
+  }
+  
+  .alien-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  /* Alien Blue Badge */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1 text-caption font-medium rounded-full;
+  }
+  
+  .badge-planning { @apply bg-alien-500/20 text-alien-300 border border-alien-500/30; }
+  .badge-inprogress { @apply bg-amber-500/20 text-amber-300 border border-amber-500/30; }
+  .badge-completed { @apply bg-emerald-500/20 text-emerald-300 border border-emerald-500/30; }
+  .badge-onhold { @apply bg-slate-500/20 text-slate-300 border border-slate-500/30; }
+  .badge-cancelled { @apply bg-red-500/20 text-red-300 border border-red-500/30; }
+  .badge-pending { @apply bg-amber-500/20 text-amber-300 border border-amber-500/30; }
+  .badge-kal { @apply bg-alien-500/20 text-alien-300 border border-alien-500/30; }
+  .badge-sul { @apply bg-emerald-500/20 text-emerald-300 border border-emerald-500/30; }
+
+  /* Alien Blue Stat Card */
+  .stat-card {
+    @apply bg-alien-800/60 backdrop-blur-sm border border-alien-500/20 rounded-card shadow-card transition-all duration-300 p-6 relative overflow-hidden;
+  }
+  
+  .stat-card::before {
+    @apply content-[''] absolute inset-0 bg-gradient-to-br from-alien-500/10 to-transparent opacity-0 transition-opacity duration-300;
+  }
+  
+  .stat-card:hover::before {
+    @apply opacity-100;
+  }
+
+  /* Alien Blue KPI Card */
+  .kpi-card {
+    @apply bg-alien-800/80 backdrop-blur-md border border-alien-500/30 rounded-card-lg shadow-glow-md p-6 relative overflow-hidden;
+  }
+  
+  .kpi-card::after {
+    @apply content-[''] absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-0.5 
+           bg-gradient-to-r from-transparent via-alien-500/50 to-transparent;
+  }
+
+  /* Alien Blue Modal/Dialog */
+  .alien-modal-overlay {
+    @apply fixed inset-0 bg-black/70 backdrop-blur-sm z-50 animate-fade-in;
+  }
+  
+  .alien-modal {
+    @apply bg-alien-800/80 backdrop-blur-md border border-alien-500/30 rounded-card-lg shadow-glow-md max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden animate-scale-in;
+  }
+  
+  .alien-modal-header {
+    @apply px-6 py-4 border-b border-alien-500/20 flex items-center justify-between;
+  }
+  
+  .alien-modal-body {
+    @apply px-6 py-4 max-h-[60vh] overflow-y-auto;
+  }
+  
+  .alien-modal-footer {
+    @apply px-6 py-4 border-t border-alien-500/20 flex justify-end gap-3;
+  }
+
+  /* Alien Blue Tooltip */
+  .alien-tooltip {
+    @apply absolute z-50 px-3 py-2 text-caption text-alien-100
+           bg-alien-900/95 backdrop-blur-sm border border-alien-500/30 rounded-lg shadow-glow-sm
+           whitespace-nowrap pointer-events-none;
+  }
+
+  /* Alien Blue Loading */
+  .alien-spinner {
+    @apply relative w-8 h-8;
+  }
+  
+  .alien-spinner::before,
+  .alien-spinner::after {
+    @apply content-[''] absolute inset-0 border-2 rounded-full;
+  }
+  
+  .alien-spinner::before {
+    @apply border-alien-500/20;
+  }
+  
+  .alien-spinner::after {
+    @apply border-alien-500 border-t-transparent animate-spin;
+  }
+
+  /* Alien Blue Progress */
+  .alien-progress {
+    @apply w-full h-2 bg-alien-800 rounded-full overflow-hidden;
+  }
+  
+  .alien-progress-bar {
+    @apply h-full bg-gradient-to-r from-alien-500 to-alien-400 rounded-full transition-all duration-500 ease-out;
+  }
+
+  /* Alien Blue Sidebar Link */
+  .sidebar-link {
+    @apply flex items-center gap-3 px-3 py-2.5 text-body-sm font-medium text-alien-400
+           rounded-xl transition-all duration-200
+           hover:bg-alien-700/30 hover:text-alien-100 hover:shadow-glow-sm
+           active:scale-[0.98];
+  }
+  
+  .sidebar-link-active {
+    @apply bg-gradient-to-r from-alien-500/20 to-alien-600/10 text-alien-100 
+           border border-alien-500/30 shadow-glow-sm;
+  }
+
+  /* Alien Blue Tab */
+  .tab {
+    @apply px-4 py-2.5 text-body-sm font-medium text-alien-400
+           border-b-2 border-transparent rounded-t-lg
+           hover:text-alien-200 hover:border-alien-500/30
+           transition-all duration-200;
+  }
+  
+  .tab-active {
+    @apply text-alien-100 border-alien-500 relative;
+  }
+  
+  .tab-active::after {
+    @apply content-[''] absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-1.5
+           bg-gradient-to-r from-alien-500 to-alien-400 rounded-full;
+  }
+
+  /* Alien Blue Tooltip Trigger */
+  .tooltip-trigger {
+    @apply relative inline-block cursor-help;
+  }
+  
+  .tooltip-trigger:hover .alien-tooltip {
+    @apply block animate-fade-in;
+  }
+
+  /* Alien Blue Empty State */
+  .empty-state {
+    @apply flex flex-col items-center justify-center py-16 px-6 text-center;
+  }
+  
+  .empty-state-icon {
+    @apply w-16 h-16 text-alien-500/30 mb-4;
+  }
+  
+  .empty-state-title {
+    @apply text-heading-md text-alien-300 mb-2;
+  }
+  
+  .empty-state-desc {
+    @apply text-body-md text-alien-500 max-w-md;
+  }
+
+  /* Alien Blue Page Header */
+  .page-header {
+    @apply mb-8;
+  }
+  
+  .page-header-title {
+    @apply text-display-md font-bold text-alien-100 tracking-tight;
+  }
+  
+  .page-header-subtitle {
+    @apply text-body-lg text-alien-400 mt-2;
+  }
+
+  /* Alien Blue Section */
+  .section {
+    @apply space-y-6;
+  }
+  
+  .section-title {
+    @apply text-heading-lg font-semibold text-alien-100 flex items-center gap-2;
+  }
+  
+  .section-title::before {
+    @apply content-[''] w-1 h-6 bg-gradient-to-b from-alien-500 to-alien-400 rounded-full;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .animate-in {
+    animation: fade-in 0.3s ease-out, slide-up 0.3s ease-out;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slide-up {
+    from { transform: translateY(8px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  
+  .stagger-1 { animation-delay: 50ms; }
+  .stagger-2 { animation-delay: 100ms; }
+  .stagger-3 { animation-delay: 150ms; }
+  .stagger-4 { animation-delay: 200ms; }
+  .stagger-5 { animation-delay: 250ms; }
+  
+  .glass {
+    @apply bg-alien-800/60 backdrop-blur-sm border border-alien-500/20;
+  }
+  
+  .glass-strong {
+    @apply bg-alien-800/80 backdrop-blur-md border border-alien-500/30;
+  }
+  
+  .text-gradient {
+    @apply bg-gradient-to-r from-alien-400 via-alien-300 to-electric-400 bg-clip-text text-transparent;
+  }
+  
+  .border-glow {
+    @apply border-alien-500/30 shadow-[0_0_8px_rgba(59,130,246,0.2)];
+  }
+  
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
