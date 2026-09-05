@@ -394,17 +394,62 @@ async function dashboardRegional() {
 async function dashboardKpi(query) {
   let items = [];
   for (const d of tabsForRegion(query)) items = items.concat(await readCanonical(d));
-  const completed = items.filter((r) => /completed|done|selesai|closed|passed|approved/i.test(String(r.status || ''))).length;
+  const isDone = (s) => /completed|done|selesai|closed|passed|approved/i.test(String(s || ''));
+  const completed = items.filter((r) => isDone(r.status)).length;
   const active = items.filter((r) => /progress|pending|active|in progress|started|onprocess|draft/i.test(String(r.status || ''))).length;
+
+  // avgTAT: average days between assignmentDate and connectedDate for completed items
+  let tatSum = 0;
+  let tatCount = 0;
+  for (const r of items) {
+    if (!isDone(r.status)) continue;
+    const a = itemMonth(r); // fallback to connectedDate
+    const assign = Date.parse(String(r.assignmentDate || ''));
+    if (a && Number.isFinite(assign)) {
+      const diff = Math.round((a.getTime() - assign) / 86400000);
+      if (diff > 0 && diff < 1000) { tatSum += diff; tatCount++; }
+    }
+  }
+  const avgTAT = tatCount ? Math.round(tatSum / tatCount) : 0;
+
+  // onTimeDelivery: connected within 60 days of assignment
+  let onTime = 0;
+  for (const r of items) {
+    if (!isDone(r.status)) continue;
+    const a = itemMonth(r);
+    const assign = Date.parse(String(r.assignmentDate || ''));
+    if (a && Number.isFinite(assign)) {
+      const diff = Math.round((a.getTime() - assign) / 86400000);
+      if (diff >= 0 && diff <= 60) onTime++;
+    }
+  }
+  const onTimeDelivery = completed ? Math.round((onTime / completed) * 100) : 0;
+
+  // materialOnTime: % inbound items completed from Inbound tab
+  let matTotal = 0;
+  let matDone = 0;
+  try {
+    const matItems = await svc.readTab(process.env.SHEET_ID, 'Inbound');
+    matTotal = matItems.rows.length;
+    // Prefer "Status LDM" (progress), fallback to any status-ish column.
+    const h = matItems.headers.map((x) => String(x || '').toLowerCase());
+    let statusCol = h.findIndex((x) => x === 'status ldm');
+    if (statusCol < 0) statusCol = h.findIndex((x) => /status/i.test(x));
+    if (statusCol >= 0) {
+      matDone = matItems.rows.filter((r) => /completed|done|done tagging|ldm done|inbound done|complete|selesai|finished|approved|pass/i.test(String(r[statusCol] || ''))).length;
+    }
+  } catch (e) { /* ignore */ }
+  const materialOnTime = matTotal ? Math.round((matDone / matTotal) * 100) : 0;
+
   return {
     totalWorkItems: items.length,
     activeWorkItems: active,
     completedWorkItems: completed,
     overdueWorkItems: 0,
     completionRate: items.length ? Math.round((completed / items.length) * 100) : 0,
-    avgTAT: 0,
-    onTimeDelivery: 0,
-    materialOnTime: 0,
+    avgTAT,
+    onTimeDelivery,
+    materialOnTime,
     completedTotal: completed,
     overAllRate: items.length ? Math.round((completed / items.length) * 100) : 0,
     regions: Object.keys({ sulawesi: 1, kalimantan: 1 }),
@@ -429,10 +474,17 @@ async function dashboardWorkitems(req) {
 
 /** Date used for monthly aggregation (completed date / connected date). */
 function itemMonth(item) {
-  const candidates = item._tab && String(item._tab).includes('SUL')
-    ? ['Connected Date', 'Dismantle Date', 'Date Upload', 'eATP Approve TSEL Date']
-    : ['Date Submit ATP', 'Clock out Date', 'ASSIGNMENT DATE'];
+  const candidates = ['connectedDate'];
   for (const key of candidates) {
+    if (item[key] && item[key].trim) {
+      const t = Date.parse(String(item[key]));
+      if (Number.isFinite(t)) return new Date(t);
+    }
+  }
+  const fallback = item._tab && String(item._tab).includes('SUL')
+    ? ['Dismantle Date', 'Date Upload', 'eATP Approve TSEL Date']
+    : ['Clock out Date', 'ASSIGNMENT DATE'];
+  for (const key of fallback) {
     const t = Date.parse(String(item[key] || ''));
     if (Number.isFinite(t)) return new Date(t);
   }
@@ -513,7 +565,32 @@ async function kpiBreakdown(query) {
       avgTAT: 0,
     });
   }
-  return { byRegion, byProgram, byStatus, rows };
+  // Monthly target vs actual (last 6 months): target=items with Monthly Target set
+  // that were assigned that month; actual=items with Connected Date that month.
+  const monthly = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    let target = 0;
+    let actual = 0;
+    for (const it of items) {
+      const mt = Number(String(it.monthlyTarget || '').replace(/[^0-9.\-]/g, ''));
+      const dm = itemMonth(it);
+      if (!Number.isNaN(mt) && mt > 0 && dm && dm.getFullYear() === y && dm.getMonth() === m) target++;
+      if (dm && dm.getFullYear() === y && dm.getMonth() === m &&
+          /completed|done|selesai|closed|passed|approved/i.test(String(it.status || ''))) actual++;
+    }
+    monthly.push({
+      label: `${d.toLocaleString('en', { month: 'short' })} ${String(y).slice(2)}`,
+      target,
+      actual,
+      variance: actual - target,
+      achievement: target ? Math.round((actual / target) * 100) : 0,
+    });
+  }
+  return { byRegion, byProgram, byStatus, rows, monthly };
 }
 
 /** Route an authorized request. Returns { status, body } or null (unhandled). */

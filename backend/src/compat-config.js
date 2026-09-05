@@ -44,6 +44,7 @@ const RESOURCES = {
       monthlyTarget: ['Monthly Target'], monthlyAssignment: ['Monthly Assignment'],
       poYear: ['PO Year'], yearsAssigned: ['Years Assigned'],
       remark: ['Remark', 'Remarks', 'REMARK'], zteZone: ['ZTE Zone', 'ZTE ZONE', 'Cluster', 'Branch'],
+      connectedDate: ['Connected Date', 'Date Submit ATP'],
       partner: ['Partner Actual'],
     },
   },
@@ -58,7 +59,7 @@ const RESOURCES = {
       assignmentDate: ['Assignment Date'], monthlyTarget: ['Monthly Target'],
       monthlyAssignment: ['Monthly Assignment'], poYear: ['PO Year'],
       yearsAssigned: ['Years Assigned'], remark: ['Remark', 'Daily REMARK'],
-      zteZone: ['ZTE Zone'], partner: ['Partner Actual'],
+      zteZone: ['ZTE Zone'], connectedDate: ['Connected Date', 'Date Submit ATP'], partner: ['Partner Actual'],
     },
   },
   materials: {
