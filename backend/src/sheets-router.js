@@ -150,12 +150,35 @@ async function listResource(resourceName, query = {}) {
   return { status: 200, body: exposeRows(sliced) };
 }
 
-/** List available site columns (all headers) from Site_SUL/KAL for the create form. */
+/** List available site columns (all headers) from Site_SUL/KAL for the create form,
+ *  tagging columns that hold date data so the UI can use a date picker. */
 async function siteFields() {
+  const isDateCol = (name) => {
+    const lower = String(name || '').trim().toLowerCase();
+    if (lower === '' || lower.startsWith('remark') || /^no\.?$/.test(lower)) return false;
+    const patterns = [
+      /date/i,
+      /\bhi (start|done)\b/,
+      /\binstallation start\b/,
+      /expired|expire/,
+      /release/,
+      /\bclock in\b/,
+      /^baut approved/,
+      /submit/i,
+      /\b(done|start|inbound|inbond|pickup|realise|realize|upload|finished)\b/,
+    ];
+    return patterns.some((re) => re.test(lower));
+  };
   const fields = {};
   for (const [key, d] of [['sul', compat.resource(SUL)], ['kal', compat.resource(KAL)]]) {
     const { headers } = await svc.readTab(process.env.SHEET_ID, d.legacyTab);
-    fields[key] = headers.map((h) => String(h || '').trim()).filter((h) => h !== '' && !/^no\.?$/i.test(h));
+    fields[key] = headers
+      .map((h) => String(h || '').trim())
+      .filter((h) => h !== '' && !/^no\.?$/i.test(h))
+      .map((h) => ({
+        name: h,
+        type: isDateCol(h) ? 'date' : 'text',
+      }));
   }
   return { status: 200, body: fields };
 }
