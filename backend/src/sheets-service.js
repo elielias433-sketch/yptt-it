@@ -146,6 +146,26 @@ async function patchRow(spreadsheetId, tab, rowIndex, patch) {
   return patch.length;
 }
 
+/** Delete a whole row (1-based sheet row) from a tab. */
+async function deleteRowRow(spreadsheetId, tab, rowIndex) {
+  const id = resolveSheetId(spreadsheetId);
+  const meta = await getSheets().spreadsheets.get({ spreadsheetId: id });
+  const sheet = (meta.data.sheets || []).find((s) => s.properties.title === tab);
+  if (!sheet) throw new Error(`Tab not found: ${tab}`);
+  const sheetId = sheet.properties.sheetId;
+  await getSheets().spreadsheets.batchUpdate({
+    spreadsheetId: id,
+    requestBody: {
+      requests: [{
+        deleteDimension: {
+          range: { sheetId, dimension: 'ROWS', startIndex: rowIndex - 1, endIndex: rowIndex },
+        },
+      }],
+    },
+  });
+  return rowIndex;
+}
+
 module.exports = {
   getAuth,
   getSheets,
@@ -156,4 +176,5 @@ module.exports = {
   appendRow,
   updateRow,
   patchRow,
+  deleteRowRow,
 };
