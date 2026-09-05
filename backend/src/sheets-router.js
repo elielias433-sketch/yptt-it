@@ -1,218 +1,250 @@
 /**
- * sheets-router.js — Map gateway API paths to direct Google Sheets reads.
+ * sheets-router.js — Direct Google Sheets CRUD via service account.
  *
- * Once the backend has verified the Firebase ID token + RBAC (done upstream),
- * this module resolves the request path to a spreadsheet tab and returns JSON
- * built from the live sheet data.
+ * Handles /api/* after Firebase token verification + RBAC (enforced upstream
+ * in server.js). Uses the compat-config mapping so reads/writes line up with
+ * the original Apps Script Compat adapter (canonical keys, per-resource tabs).
  *
  * Env:
  *   SHEET_ID   spreadsheet id (1wP6sHi1-...)
  */
 
 const svc = require('./sheets-service');
+const compat = require('./compat-config');
 
-const SUL_TAB = 'Site_SUL';
-const KAL_TAB = 'Site_KAL';
+const SUL = 'sites_sul';
+const KAL = 'sites_kal';
 
-const DEFAULT_TABS = {
-  sites: [SUL_TAB, KAL_TAB],
-  teams: ['Team List'],
-  materials: [],            // no dedicated tab; material/equipment data - inbound has material detail
-  validations: ['Validasi'],
-  workorders: [],           // no dedicated tab in this workbook
-  upgrades: [],
-  inbound: ['Inbound'],
-  ineom: ['Ineom'],
-  lom: ['LOM'],
-  "inbound-return": ['Inbound Return'],
-};
-
-const REGION_TAB_MAP = {
-  sulawesi: [SUL_TAB],
-  kalimantan: [KAL_TAB],
-};
-
-function resolveTabs(key) {
-  return DEFAULT_TABS[key] || [];
+/** Resolve the resource key subsets for sites reads. */
+function siteTabs() {
+  return [compat.resource(SUL), compat.resource(KAL)];
 }
 
-/**
- * Extract a status-ish token from a row using the actual columns of each tab.
- * Completed: COMPLETED / DONE / SELESAI / CLOSED / PASSED / APPROVED
- * Active:    PROGRESS / PENDING / ACTIVE / STARTED / ONGOING / OPEN / DRAFT
- */
-function classifyStatus(row, tab) {
-  const s = tab.includes('SUL')
-      ? String(row['Site Productivity Status'] || row['SM Status'] || row['Status'] || '').toUpperCase()
-      : String(row['STATUS'] || row['Status'] || row['CI Status'] || '').toUpperCase();
-  if (/COMPLETED|DONE|SELESAI|CLOSED|PASSED|APPROVED|FINISHED/.test(s)) return 'completed';
-  if (/PROGRESS|PENDING|ACTIVE|STARTED|ONGOING|OPEN|DRAFT|IN_/.test(s)) return 'active';
-  return 'other';
-}
-
-/** Best-effort date from a row for "completed this month" checks. */
-function doneDate(row, tab) {
-  const candidates = tab.includes('SUL')
-      ? ['Connected Date', 'Dismantle Date', 'Date Upload', 'eATP Approve TSEL Date']
-      : ['Date Submit ATP', 'Clock out Date', 'Date'];
-  for (const key of candidates) {
-    const v = row[key];
-    const t = v ? Date.parse(String(v)) : NaN;
-    if (Number.isFinite(t)) return new Date(t);
+/** Which legacy tab (and resource descriptor) to write a site row to. */
+function resolveSiteTab(data) {
+  const region = String(data.region || data.regionCity || '').toLowerCase();
+  if (region.includes('kal') || region.includes('banjar') || region.includes('samarinda')) {
+    return compat.resource(KAL);
   }
+  return compat.resource(SUL);
+}
+
+/** Read a tab via compat config and return canonical rows. */
+async function readCanonical(descriptor) {
+  const { headers, rows } = await svc.readTab(process.env.SHEET_ID, descriptor.legacyTab);
+  return rows.map((row) => compat.rowToCanonical(descriptorName(descriptor), headers, row));
+}
+
+function descriptorName(d) {
+  for (const [k, v] of Object.entries(compat.RESOURCES)) if (v === d) return k;
   return null;
 }
 
-async function collectWorkItems(tabs) {
-  const all = [];
-  for (const tab of tabs) {
-    const rows = await svc.readSheet(process.env.SHEET_ID, tab);
-    for (const r of rows) {
-      const kl = classifyStatus(r, tab);
-      if (kl !== 'other') all.push({ ...r, _tab: tab, _klass: kl });
+// ---------------------------------------------------------------------------
+// READ
+// ---------------------------------------------------------------------------
+
+async function listResource(resourceName, query = {}) {
+  const desc = compat.resource(resourceName);
+  if (!desc) return { status: 404, body: { error: 'Unknown resource' } };
+
+  let rows = [];
+  if (resourceName === 'sites') {
+    for (const d of siteTabs()) rows = rows.concat(await readCanonical(d));
+  } else {
+    rows = await readCanonical(desc);
+  }
+
+  // Filtering (case-insensitive partial match on query keys).
+  for (const [k, v] of Object.entries(query)) {
+    if (!v || k === 'limit' || k === 'offset' || k === 'sort' || k === 'order' || k === 'page') continue;
+    const key = v.toLowerCase();
+    rows = rows.filter((r) => (r[k] !== undefined && String(r[k]).toLowerCase().includes(key)));
+  }
+
+  const offset = Number(query.offset || 0);
+  const limit = Number(query.limit || Math.max(rows.length, 20));
+  const sliced = rows.slice(offset, offset + limit);
+  return { status: 200, body: sliced };
+}
+
+async function getResourceById(resourceName, id) {
+  const desc = compat.resource(resourceName);
+  if (!desc) return { status: 404, body: { error: 'Unknown resource' } };
+  const isSites = resourceName === 'sites';
+  const descs = isSites ? siteTabs() : [desc];
+
+  for (const d of descs) {
+    const key = d.key;
+    if (!key) continue;
+    const keyHeaders = await svc.readTab(process.env.SHEET_ID, d.legacyTab, 'A1:ZZ');
+    const keyCol = compat.canonicalToColumn(descriptorName(d), key, keyHeaders.headers);
+    if (keyCol < 0) continue;
+    const found = await svc.findRowsByValue(process.env.SHEET_ID, d.legacyTab, keyCol, id);
+    if (found.length === 1) {
+      const { headers, rows } = await svc.readTab(process.env.SHEET_ID, d.legacyTab);
+      const idx = found[0] - 2;
+      if (rows[idx]) {
+        const canonical = compat.rowToCanonical(descriptorName(d), headers, rows[idx]);
+        return { status: 200, body: { ...canonical, tab: d.legacyTab, rowIndex: found[0] } };
+      }
     }
   }
-  return all;
+  return { status: 404, body: { error: 'Not found' } };
 }
 
 // ---------------------------------------------------------------------------
-// Handlers
+// CREATE / UPDATE / DELETE
+// ---------------------------------------------------------------------------
+
+async function createResource(resourceName, method, body = {}) {
+  const isSites = resourceName === 'sites';
+  const desc = isSites ? resolveSiteTab(body) : compat.resource(resourceName);
+  if (!desc) return { status: 404, body: { error: 'Unknown resource' } };
+  const dname = descriptorName(desc);
+  if (!(desc.allowedOps || []).includes('CREATE')) {
+    return { status: 403, body: { error: `Create is not allowed for ${resourceName}` } };
+  }
+
+  const { headers } = await svc.readTab(process.env.SHEET_ID, desc.legacyTab);
+  const row = compat.buildCreateRow(dname, headers, body);
+  const updated = await svc.appendRow(process.env.SHEET_ID, desc.legacyTab, row);
+
+  // Audit (append to _AUDIT_LOG).
+  try {
+    await svc.appendRow(process.env.SHEET_ID, '_AUDIT_LOG', [
+      new Date().toISOString(),
+      String(body._actorUid || ''),
+      String(body._actorEmail || ''),
+      `${method} ${resourceName}`,
+      desc.legacyTab,
+      String(body.wid || body.id || ''),
+      '',
+      '',
+      JSON.stringify(body).substring(0, 500),
+      '200',
+      '',
+      '',
+    ]);
+  } catch (e) { /* audit best-effort */ }
+
+  const { rows } = await svc.readTab(process.env.SHEET_ID, desc.legacyTab);
+  const canonical = compat.rowToCanonical(dname, headers, rows[rows.length - 1]);
+  return { status: 201, body: { ...canonical, tab: desc.legacyTab, created: true } };
+}
+
+async function updateResource(resourceName, method, id, body = {}) {
+  const isSites = resourceName === 'sites';
+  const desc = isSites ? resolveSiteTab(body) : compat.resource(resourceName);
+  if (!desc) return { status: 404, body: { error: 'Unknown resource' } };
+  const dname = descriptorName(desc);
+  if (!(desc.allowedOps || []).includes('UPDATE')) {
+    return { status: 403, body: { error: `Update is not allowed for ${resourceName}` } };
+  }
+  const key = desc.key;
+  if (!key) return { status: 409, body: { error: `No stable key for ${resourceName}; update by id unsupported` } };
+
+  const { headers } = await svc.readTab(process.env.SHEET_ID, desc.legacyTab);
+  const keyCol = compat.canonicalToColumn(dname, key, headers);
+  if (keyCol < 0) return { status: 500, body: { error: 'Key column not found' } };
+  const matches = await svc.findRowsByValue(process.env.SHEET_ID, desc.legacyTab, keyCol, id);
+  if (matches.length === 0) return { status: 404, body: { error: 'Not found' } };
+  if (matches.length > 1) return { status: 409, body: { error: `Ambiguous: ${matches.length} rows match ${key}=${id}` } };
+
+  const allowedFields = Object.keys(desc.fieldMap);
+  const cleanPatch = compat.buildUpdatePatch(dname, headers, body, allowedFields);
+  await svc.patchRow(process.env.SHEET_ID, desc.legacyTab, matches[0], cleanPatch);
+
+  try {
+    await svc.appendRow(process.env.SHEET_ID, '_AUDIT_LOG', [
+      new Date().toISOString(),
+      String(body._actorUid || ''),
+      String(body._actorEmail || ''),
+      `${method} ${resourceName}`,
+      desc.legacyTab,
+      String(id),
+      '',
+      '',
+      JSON.stringify(cleanPatch).substring(0, 500),
+      '200',
+      '',
+      '',
+    ]);
+  } catch (e) { /* best-effort */ }
+
+  const { rows } = await svc.readTab(process.env.SHEET_ID, desc.legacyTab);
+  const idx = matches[0] - 2;
+  const canonical = rows[idx] ? compat.rowToCanonical(dname, headers, rows[idx]) : {};
+  return { status: 200, body: { ...canonical, tab: desc.legacyTab, rowIndex: matches[0], updated: true } };
+}
+
+/** DELETE: intentionally disabled (safety) — matches legacy Compat policy. */
+function deleteResource(resourceName) {
+  return {
+    status: 501,
+    body: { error: `Delete is not implemented for ${resourceName} (row removal on production spreadsheet is disabled)` },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Router
 // ---------------------------------------------------------------------------
 
 async function dashboardSummary() {
-  const items = await collectWorkItems([SUL_TAB, KAL_TAB]);
-  const completed = items.filter((i) => i._klass === 'completed');
-  const active = items.filter((i) => i._klass === 'active');
-  const now = new Date();
-  const completedThisMonth = completed
-    .filter((i) => {
-      const d = doneDate(i, i._tab);
-      return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    }).length;
-
+  let items = [];
+  for (const d of siteTabs()) items = items.concat(await readCanonical(d));
+  const byStatus = (re) => items.filter((r) => re.test(String(r.status || ''))).length;
+  const completed = byStatus(/completed|done|selesai|closed|passed|approved/i);
+  const active = byStatus(/progress|pending|active|in progress|started|onprocess|draft/i);
   let materialsInbound = 0;
-  try {
-    materialsInbound = (await svc.readSheet(process.env.SHEET_ID, 'Inbound')).length;
-  } catch (e) { /* ignore */ }
-
-  let validationRate = 0;
-  try {
-    const vrows = await svc.readSheet(process.env.SHEET_ID, 'Validasi');
-    const hasDmt = vrows.filter((r) => /done|passed|approved|selesai|ok/i.test(String(r.DMT || r.ATP || ''))).length;
-    validationRate = vrows.length ? Math.round((hasDmt / vrows.length) * 100) : 0;
-  } catch (e) { /* ignore */ }
-
+  try { materialsInbound = (await svc.readTab(process.env.SHEET_ID, 'Inbound')).rows.length; } catch (e) {}
   return {
     totalWorkItems: items.length,
-    activeWorkItems: active.length,
-    completedThisMonth,
+    activeWorkItems: active,
+    completedThisMonth: completed,
     overdueMilestones: 0,
     materialsInbound,
-    validationRate,
+    validationRate: 0,
   };
 }
 
-async function dashboardRegional() {
-  const out = {};
-  for (const [key, tabs] of Object.entries(REGION_TAB_MAP)) {
-    const items = await collectWorkItems(tabs);
-    const completed = items.filter((i) => i._klass === 'completed').length;
-    const active = items.filter((i) => i._klass === 'active').length;
-    out[key] = {
-      workItems: items.length,
-      active,
-      completed,
-      completionRate: items.length ? Math.round((completed / items.length) * 100) : 0,
-      target: items.length,
-    };
-  }
-  return out;
-}
-
-async function dashboardKpi() {
-  const items = await collectWorkItems([SUL_TAB, KAL_TAB]);
-  const completed = items.filter((i) => i._klass === 'completed');
-  return {
-    totalWorkItems: items.length,
-    activeWorkItems: items.filter((i) => i._klass === 'active').length,
-    completedTotal: completed.length,
-    overAllRate: items.length ? Math.round((completed.length / items.length) * 100) : 0,
-    regions: Object.keys(REGION_TAB_MAP).map((k) => k),
-  };
-}
-
-async function dashboardWorkitems(req) {
-  const items = await collectWorkItems([SUL_TAB, KAL_TAB]);
-  const limit = Number(req.query.limit || 10);
-  const sort = String(req.query.sort || '').toLowerCase();
-  const order = String(req.query.order || 'desc').toLowerCase();
-  if (sort && items.length && items[0][sort] !== undefined) {
-    items.sort((a, b) => {
-      const cmp = String(a[sort] || '').localeCompare(String(b[sort] || ''));
-      return order === 'asc' ? cmp : -cmp;
-    });
-  } else {
-    items.sort((a, b) => {
-      const da = doneDate(a, a._tab);
-      const db = doneDate(b, b._tab);
-      const ta = da ? da.getTime() : 0;
-      const tb = db ? db.getTime() : 0;
-      return order === 'asc' ? ta - tb : tb - ta;
-    });
-  }
-  return items.slice(0, limit).map((i) => {
-    const { _tab, _klass, ...rest } = i;
-    return { ...rest, status: _klass, region: _tab.includes('SUL') ? 'Sulawesi' : 'Kalimantan' };
-  });
-}
-
-async function listRows(req) {
-  const parts = req.path.split('/').filter(Boolean);
-  const resource = parts[1] || '';
-  const tabs = resolveTabs(resource);
-  const rows = [];
-  for (const tab of tabs) {
-    const items = await svc.readSheet(process.env.SHEET_ID, tab);
-    rows.push(...items.map((r) => ({ ...r, tab })));
-  }
-  const limit = Number(req.query.limit || (rows.length === 0 ? 20 : Math.min(rows.length, 20)));
-  return rows.slice(0, limit);
-}
-
-/**
- * Route an authorized request to the correct handler.
- * Returns { status, body } or null when the path is not handled here.
- */
-async function handlePath({ method, path, query }) {
+/** Route an authorized request. Returns { status, body } or null (unhandled). */
+async function handlePath({ method, path, query, body }) {
   const parts = path.split('/').filter(Boolean);
   if (parts[0] !== 'api') return null;
 
   if (method === 'GET') {
     if (path.startsWith('/api/dashboard/summary')) return { status: 200, body: await dashboardSummary() };
-    if (path.startsWith('/api/dashboard/regional')) return { status: 200, body: await dashboardRegional() };
-    if (path.startsWith('/api/dashboard/kpi')) return { status: 200, body: await dashboardKpi() };
-    if (path.startsWith('/api/dashboard/workitems')) return { status: 200, body: await dashboardWorkitems({ query }) };
-    if (path.startsWith('/api/dashboard/')) return { status: 200, body: {} };
-    return { status: 200, body: await listRows({ path, query }) };
-  }
-
-  if (['POST', 'PUT', 'DELETE'].includes(method) && parts.length >= 2) {
-    const resource = parts[1];
-    const tabs = resolveTabs(resource);
-    if (tabs.length === 0) {
-      return { status: 501, body: { error: `Write not supported yet for resource: ${resource}` } };
+    if (path.startsWith('/api/dashboard/')) {
+      const tally = await dashboardSummary();
+      return { status: 200, body: { totalWorkItems: tally.totalWorkItems, activeWorkItems: tally.activeWorkItems, completedTotal: tally.completedThisMonth, overAllRate: tally.totalWorkItems ? Math.round((tally.completedThisMonth / tally.totalWorkItems) * 100) : 0 } };
     }
-    return { status: 501, body: { error: `Write via Sheets direct: not yet implemented for ${resource}` } };
+    const resourceName = parts[1];
+    const id = parts[2];
+    if (!compat.resource(resourceName) && resourceName !== 'inbound' && resourceName !== 'lom') {
+      return { status: 404, body: { error: `Unknown resource: ${resourceName}` } };
+    }
+    if (id) return getResourceById(resourceName, id);
+    return listResource(resourceName, query || {});
   }
 
-  return null;
+  if (['POST', 'PUT', 'DELETE'].includes(method)) {
+    const resourceName = parts[1];
+    const id = parts[2];
+    if (method === 'POST') return createResource(resourceName, method, body || {});
+    if (method === 'PUT') return updateResource(resourceName, method, id, body || {});
+    return deleteResource(resourceName);
+  }
+
+  return { status: 405, body: { error: 'Method not allowed' } };
 }
 
 module.exports = {
   handlePath,
+  listResource,
+  getResourceById,
+  createResource,
+  updateResource,
+  deleteResource,
   dashboardSummary,
-  dashboardRegional,
-  dashboardKpi,
-  dashboardWorkitems,
-  listRows,
 };

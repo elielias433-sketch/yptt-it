@@ -146,7 +146,7 @@ function buildApp(options = {}) {
         return;
       }
       try {
-        const out = await sheetsRouter.handlePath({ method, path: pathname, query });
+        const out = await sheetsRouter.handlePath({ method, path: pathname, query, body: req.body || {} });
         if (out) {
           res.status(out.status).setHeader('Content-Type', 'application/json');
           res.send(JSON.stringify(out.body));

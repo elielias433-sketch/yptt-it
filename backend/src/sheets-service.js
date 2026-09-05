@@ -98,11 +98,62 @@ async function updateRow(spreadsheetId, tab, rowIndex, values) {
   return res.data.updatedRows || 0;
 }
 
+/** Read raw rows of a tab: { headers, rows } where rows are arrays (excl. header). */
+async function readTab(spreadsheetId, tab, range = 'A1:ZZ') {
+  const id = resolveSheetId(spreadsheetId);
+  const res = await getSheets().spreadsheets.values.get({
+    spreadsheetId: id,
+    range: `${tab}!${range}`,
+  });
+  const values = res.data.values || [];
+  if (values.length === 0) return { headers: [], rows: [] };
+  return { headers: values[0], rows: values.slice(1) };
+}
+
+/**
+ * Find all row indexes (1-based, header row = 1) where a column exact-matches value.
+ * @returns {number[]} sheet row numbers (start at 2 for first data row).
+ */
+async function findRowsByValue(spreadsheetId, tab, columnIndex, value) {
+  const { rows } = await readTab(spreadsheetId, tab);
+  const matches = [];
+  const target = String(value == null ? '' : value).trim().toLowerCase();
+  rows.forEach((row, i) => {
+    const cell = row[columnIndex] !== undefined ? String(row[columnIndex]).trim().toLowerCase() : '';
+    if (cell === target) matches.push(i + 2); // sheet row = data index + 1 (header) + 1
+  });
+  return matches;
+}
+
+/** Patch cells on a specific sheet row (1-based). patch = [{col, value}]. */
+async function patchRow(spreadsheetId, tab, rowIndex, patch) {
+  const id = resolveSheetId(spreadsheetId);
+  const colLetter = (c) => {
+    let n = c;
+    let s = '';
+    while (n >= 0) { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; }
+    return s;
+  };
+  for (const { col, value } of patch) {
+    const range = `${tab}!${colLetter(col)}${rowIndex}`;
+    await getSheets().spreadsheets.values.update({
+      spreadsheetId: id,
+      range,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [[value]] },
+    });
+  }
+  return patch.length;
+}
+
 module.exports = {
   getAuth,
   getSheets,
   listTabs,
   readSheet,
+  readTab,
+  findRowsByValue,
   appendRow,
   updateRow,
+  patchRow,
 };
