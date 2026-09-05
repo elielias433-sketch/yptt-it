@@ -87,7 +87,7 @@ const RESOURCES = {
   teams: {
     legacyTab: 'Team List',
     key: '',
-    allowedOps: ['READ', 'CREATE'],
+    allowedOps: ['READ', 'CREATE', 'UPDATE'],
     fieldMap: {
       name: ['Name'], position: ['Position'], contact: ['Kontak'],
       email: ['Email'], regionCity: ['Region / City'],
@@ -97,7 +97,7 @@ const RESOURCES = {
   validations: {
     legacyTab: 'Validasi',
     key: '',
-    allowedOps: ['READ', 'CREATE'],
+    allowedOps: ['READ', 'CREATE', 'UPDATE'],
     fieldMap: {
       zteZone: ['ZTE ZONE'], tiEngineer: ['TI Engineer'],
       status: ['Status SM ATP'], gapAnalysis: ['GAP Analysis'],

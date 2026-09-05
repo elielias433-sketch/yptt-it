@@ -29,13 +29,19 @@ function resolveSiteTab(data) {
   return compat.resource(SUL);
 }
 
-/** Read a tab via compat config and return canonical rows (tagged with _tab). */
+/** Read a tab via compat config and return canonical rows (tagged _tab, _row). */
 async function readCanonical(descriptor) {
   const { headers, rows } = await svc.readTab(process.env.SHEET_ID, descriptor.legacyTab);
-  return rows.map((row) => ({
+  return rows.map((row, i) => ({
     ...compat.rowToCanonical(descriptorName(descriptor), headers, row),
     _tab: descriptor.legacyTab,
+    _row: i + 2,
   }));
+}
+
+/** Strip internal markers, expose `id` (sheet row) for client use. */
+function exposeRows(rows) {
+  return rows.map(({ _tab, _row, ...rest }) => ({ ...rest, id: _row }));
 }
 
 function descriptorName(d) {
@@ -65,8 +71,10 @@ async function listResource(resourceName, query = {}) {
       rows = await readCanonical(desc);
     }
   }
-  // 'workorders' / virtual resources have no tab -> empty list (compat frontend)
-  if (resourceName === 'workorders') rows = [];
+  // 'workorders' uses the site workbook as its data source (work items).
+  if (resourceName === 'workorders') {
+    for (const d of siteTabs()) rows = rows.concat(await readCanonical(d));
+  }
 
   const CONTROL = new Set(['limit', 'offset', 'page', 'sort', 'order', 'sortField', 'sortOrder', 'search', 'tab']);
   // Exact/partial filters (region, status, workType, ...)
@@ -104,12 +112,12 @@ async function listResource(resourceName, query = {}) {
   const sliced = rows.slice(offset, offset + limit);
 
   if (RESPONSE_SHAPE[resourceName]) {
-    const body = { [RESPONSE_SHAPE[resourceName]]: sliced, total: rows.length };
+    const body = { [RESPONSE_SHAPE[resourceName]]: exposeRows(sliced), total: rows.length };
     if (resourceName === 'validations') body.zones = ['Pare Pare', 'Makassar', 'Other'];
     return { status: 200, body };
   }
   // teams / upgrades return a plain array
-  return { status: 200, body: sliced };
+  return { status: 200, body: exposeRows(sliced) };
 }
 
 async function getResourceById(resourceName, id) {
@@ -130,7 +138,7 @@ async function getResourceById(resourceName, id) {
       const idx = found[0] - 2;
       if (rows[idx]) {
         const canonical = compat.rowToCanonical(descriptorName(d), headers, rows[idx]);
-        return { status: 200, body: { ...canonical, tab: d.legacyTab, rowIndex: found[0] } };
+        return { status: 200, body: { ...exposeRows([{ ...canonical, _row: found[0] }])[0], tab: d.legacyTab, rowIndex: found[0] } };
       }
     }
   }
@@ -197,7 +205,7 @@ async function createResource(resourceName, method, body = {}) {
   if (m) rowIndex = Number(m[1]);
   const rawRow = rows[rowIndex - 2];
   const canonical = rawRow ? compat.rowToCanonical(dname, headers, rawRow) : {};
-  return { status: 201, body: { ...canonical, tab: desc.legacyTab, rowIndex, created: true } };
+  return { status: 201, body: { ...exposeRows([{ ...canonical, _row: rowIndex }])[0], tab: desc.legacyTab, rowIndex, created: true } };
 }
 
 async function updateResource(resourceName, method, id, body = {}) {
@@ -209,18 +217,27 @@ async function updateResource(resourceName, method, id, body = {}) {
     return { status: 403, body: { error: `Update is not allowed for ${resourceName}` } };
   }
   const key = desc.key;
-  if (!key) return { status: 409, body: { error: `No stable key for ${resourceName}; update by id unsupported` } };
-
   const { headers } = await svc.readTab(process.env.SHEET_ID, desc.legacyTab);
-  const keyCol = compat.canonicalToColumn(dname, key, headers);
-  if (keyCol < 0) return { status: 500, body: { error: 'Key column not found' } };
-  const matches = await svc.findRowsByValue(process.env.SHEET_ID, desc.legacyTab, keyCol, id);
-  if (matches.length === 0) return { status: 404, body: { error: 'Not found' } };
-  if (matches.length > 1) return { status: 409, body: { error: `Ambiguous: ${matches.length} rows match ${key}=${id}` } };
+  let targetRow;
+  if (key) {
+    const keyCol = compat.canonicalToColumn(dname, key, headers);
+    if (keyCol < 0) return { status: 500, body: { error: 'Key column not found' } };
+    const matches = await svc.findRowsByValue(process.env.SHEET_ID, desc.legacyTab, keyCol, id);
+    if (matches.length === 0) return { status: 404, body: { error: 'Not found' } };
+    if (matches.length > 1) return { status: 409, body: { error: `Ambiguous: ${matches.length} rows match ${key}=${id}` } };
+    targetRow = matches[0];
+  } else {
+    // No stable key (teams/validations) -> id is the sheet row number.
+    const rowNum = Number(id);
+    if (!Number.isInteger(rowNum) || rowNum < 2) return { status: 400, body: { error: 'Invalid row id' } };
+    const total = (await svc.readTab(process.env.SHEET_ID, desc.legacyTab)).rows.length;
+    if (rowNum > total + 1) return { status: 404, body: { error: 'Not found' } };
+    targetRow = rowNum;
+  }
 
   const allowedFields = Object.keys(desc.fieldMap);
   const cleanPatch = compat.buildUpdatePatch(dname, headers, body, allowedFields);
-  await svc.patchRow(process.env.SHEET_ID, desc.legacyTab, matches[0], cleanPatch);
+  await svc.patchRow(process.env.SHEET_ID, desc.legacyTab, targetRow, cleanPatch);
 
   try {
     await svc.appendRow(process.env.SHEET_ID, '_AUDIT_LOG', [
@@ -240,17 +257,42 @@ async function updateResource(resourceName, method, id, body = {}) {
   } catch (e) { /* best-effort */ }
 
   const { rows } = await svc.readTab(process.env.SHEET_ID, desc.legacyTab);
-  const idx = matches[0] - 2;
+  const idx = targetRow - 2;
   const canonical = rows[idx] ? compat.rowToCanonical(dname, headers, rows[idx]) : {};
-  return { status: 200, body: { ...canonical, tab: desc.legacyTab, rowIndex: matches[0], updated: true } };
+  return { status: 200, body: { ...canonical, tab: desc.legacyTab, rowIndex: targetRow, updated: true } };
 }
 
-/** DELETE: intentionally disabled (safety) — matches legacy Compat policy. */
-function deleteResource(resourceName) {
-  return {
-    status: 501,
-    body: { error: `Delete is not implemented for ${resourceName} (row removal on production spreadsheet is disabled)` },
-  };
+/** DELETE — removes the matching row (admin-only, enforced upstream). */
+async function deleteResource(resourceName, id) {
+  const desc = compat.resource(resourceName);
+  if (!desc) return { status: 404, body: { error: 'Unknown resource' } };
+  const isSites = resourceName === 'sites';
+  const descs = isSites ? siteTabs() : [desc];
+  const dname = isSites ? descriptorName(descs[0]) : descriptorName(desc);
+
+  // Row-based delete (teams/validations): id = sheet row number.
+  if (!desc.key) {
+    const rowNum = Number(id);
+    if (!Number.isInteger(rowNum) || rowNum < 2) return { status: 400, body: { error: 'Invalid row id' } };
+    await svc.deleteRowRow(process.env.SHEET_ID, desc.legacyTab, rowNum);
+    return { status: 200, body: { deleted: true, tab: desc.legacyTab, rowIndex: rowNum } };
+  }
+
+  // Key-based delete (sites/materials/upgrades): search by key across tabs.
+  for (const d of descs) {
+    const dn = isSites ? descriptorName(d) : descriptorName(desc);
+    const { headers } = await svc.readTab(process.env.SHEET_ID, d.legacyTab, 'A1:ZZ');
+    const keyCol = compat.canonicalToColumn(dn, d.key, headers);
+    if (keyCol < 0) continue;
+    const matches = await svc.findRowsByValue(process.env.SHEET_ID, d.legacyTab, keyCol, id);
+    for (const m of matches.slice().reverse()) {
+      await svc.deleteRowRow(process.env.SHEET_ID, d.legacyTab, m);
+    }
+    if (matches.length) {
+      return { status: 200, body: { deleted: true, tab: d.legacyTab, rows: matches } };
+    }
+  }
+  return { status: 404, body: { error: 'Not found' } };
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +364,75 @@ async function dashboardWorkitems(req) {
   return decorated.slice(0, limit);
 }
 
+/** Date used for monthly aggregation (completed date / connected date). */
+function itemMonth(item) {
+  const candidates = item._tab && String(item._tab).includes('SUL')
+    ? ['Connected Date', 'Dismantle Date', 'Date Upload', 'eATP Approve TSEL Date']
+    : ['Date Submit ATP', 'Clock out Date', 'ASSIGNMENT DATE'];
+  for (const key of candidates) {
+    const t = Date.parse(String(item[key] || ''));
+    if (Number.isFinite(t)) return new Date(t);
+  }
+  return null;
+}
+
+/** Monthly trend lines (for KPI Trends chart). */
+async function kpiTrends() {
+  let items = [];
+  for (const d of siteTabs()) items = items.concat(await readCanonical(d));
+  const months = 6;
+  const now = new Date();
+  const buckets = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    buckets.push({
+      label: `${d.toLocaleString('en', { month: 'short' })} ${String(d.getFullYear()).slice(2)}`,
+      total: 0,
+      done: 0,
+    });
+  }
+  for (const it of items) {
+    const dt = itemMonth(it) || new Date();
+    const diff = (now.getFullYear() - dt.getFullYear()) * 12 + (now.getMonth() - dt.getMonth());
+    const idx = months - 1 - diff;
+    if (idx >= 0 && idx < months) {
+      buckets[idx].total++;
+      if (/completed|done|selesai|closed|passed|approved/i.test(String(it.status || ''))) buckets[idx].done++;
+    }
+  }
+  return [
+    { label: 'WID Volume', data: buckets.map((b) => b.total), color: '#3b82f6' },
+    { label: 'Completion', data: buckets.map((b) => (b.total ? Math.round((b.done / b.total) * 100) : 0)), color: '#10b981' },
+  ];
+}
+
+/** KPI breakdown by region / program / status. */
+async function kpiBreakdown() {
+  let items = [];
+  for (const d of siteTabs()) items = items.concat(await readCanonical(d));
+  const count = (key) => {
+    const map = {};
+    for (const it of items) {
+      const v = String(it[key] || it.program || 'Unknown').trim() || 'Unknown';
+      map[v] = (map[v] || 0) + 1;
+    }
+    return map;
+  };
+  const byRegion = {};
+  for (const it of items) {
+    const r = it._tab && String(it._tab).includes('SUL') ? 'Sulawesi' : 'Kalimantan';
+    byRegion[r] = (byRegion[r] || 0) + 1;
+  }
+  const byStatus = {};
+  for (const it of items) {
+    const s = /completed|done|selesai|closed|passed|approved/i.test(String(it.status || '')) ? 'Completed'
+      : /progress|pending|active|in progress|started|onprocess|draft/i.test(String(it.status || '')) ? 'Active'
+      : 'Planning';
+    byStatus[s] = (byStatus[s] || 0) + 1;
+  }
+  return { byRegion, byProgram: count('program'), byStatus };
+}
+
 /** Route an authorized request. Returns { status, body } or null (unhandled). */
 async function handlePath({ method, path, query, body }) {
   const parts = path.split('/').filter(Boolean);
@@ -330,6 +441,8 @@ async function handlePath({ method, path, query, body }) {
   if (method === 'GET') {
     if (path.startsWith('/api/dashboard/summary')) return { status: 200, body: await dashboardSummary() };
     if (path.startsWith('/api/dashboard/regional')) return { status: 200, body: await dashboardRegional() };
+    if (path.startsWith('/api/dashboard/kpi/trends')) return { status: 200, body: await kpiTrends() };
+    if (path.startsWith('/api/dashboard/kpi/breakdown')) return { status: 200, body: await kpiBreakdown() };
     if (path.startsWith('/api/dashboard/kpi')) return { status: 200, body: await dashboardKpi() };
     if (path.startsWith('/api/dashboard/workitems')) return { status: 200, body: await dashboardWorkitems({ query }) };
     if (path.startsWith('/api/dashboard/')) {
@@ -351,9 +464,10 @@ async function handlePath({ method, path, query, body }) {
   if (['POST', 'PUT', 'DELETE'].includes(method)) {
     const resourceName = parts[1];
     const id = parts[2];
+    const decodedId = (() => { try { return decodeURIComponent(id); } catch (e) { return id; } })();
     if (method === 'POST') return createResource(resourceName, method, body || {});
-    if (method === 'PUT') return updateResource(resourceName, method, id, body || {});
-    return deleteResource(resourceName);
+    if (method === 'PUT') return updateResource(resourceName, method, decodedId, body || {});
+    return deleteResource(resourceName, decodedId);
   }
 
   return { status: 405, body: { error: 'Method not allowed' } };
@@ -370,4 +484,6 @@ module.exports = {
   dashboardRegional,
   dashboardKpi,
   dashboardWorkitems,
+  kpiTrends,
+  kpiBreakdown,
 };
