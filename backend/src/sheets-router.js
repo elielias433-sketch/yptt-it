@@ -29,10 +29,13 @@ function resolveSiteTab(data) {
   return compat.resource(SUL);
 }
 
-/** Read a tab via compat config and return canonical rows. */
+/** Read a tab via compat config and return canonical rows (tagged with _tab). */
 async function readCanonical(descriptor) {
   const { headers, rows } = await svc.readTab(process.env.SHEET_ID, descriptor.legacyTab);
-  return rows.map((row) => compat.rowToCanonical(descriptorName(descriptor), headers, row));
+  return rows.map((row) => ({
+    ...compat.rowToCanonical(descriptorName(descriptor), headers, row),
+    _tab: descriptor.legacyTab,
+  }));
 }
 
 function descriptorName(d) {
@@ -208,6 +211,53 @@ async function dashboardSummary() {
   };
 }
 
+async function dashboardRegional() {
+  const out = {};
+  for (const [key, d] of [['sulawesi', compat.resource(SUL)], ['kalimantan', compat.resource(KAL)]]) {
+    const items = await readCanonical(d);
+    const completed = items.filter((r) => /completed|done|selesai|closed|passed|approved/i.test(String(r.status || ''))).length;
+    const active = items.filter((r) => /progress|pending|active|in progress|started|onprocess|draft/i.test(String(r.status || ''))).length;
+    out[key] = {
+      workItems: items.length,
+      active,
+      completed,
+      completionRate: items.length ? Math.round((completed / items.length) * 100) : 0,
+      target: items.length,
+    };
+  }
+  return out;
+}
+
+async function dashboardKpi() {
+  let items = [];
+  for (const d of siteTabs()) items = items.concat(await readCanonical(d));
+  const completed = items.filter((r) => /completed|done|selesai|closed|passed|approved/i.test(String(r.status || ''))).length;
+  const active = items.filter((r) => /progress|pending|active|in progress|started|onprocess|draft/i.test(String(r.status || ''))).length;
+  return {
+    totalWorkItems: items.length,
+    activeWorkItems: active,
+    completedTotal: completed,
+    overAllRate: items.length ? Math.round((completed / items.length) * 100) : 0,
+    regions: Object.keys({ sulawesi: 1, kalimantan: 1 }),
+  };
+}
+
+async function dashboardWorkitems(req) {
+  let items = [];
+  for (const d of siteTabs()) items = items.concat(await readCanonical(d));
+  if (!Array.isArray(items)) return [];
+  const decorated = items.map((i) => ({
+    ...i,
+    status: /completed|done|selesai|closed|passed|approved/i.test(String(i.status || '')) ? 'completed'
+      : /progress|pending|active|in progress|started|onprocess|draft/i.test(String(i.status || '')) ? 'active'
+      : 'planning',
+    region: i._tab ? (String(i._tab).includes('SUL') ? 'Sulawesi' : 'Kalimantan') : '',
+  })).filter((i) => i.wid);
+
+  const limit = Math.max(1, Number(req?.query?.limit || 10));
+  return decorated.slice(0, limit);
+}
+
 /** Route an authorized request. Returns { status, body } or null (unhandled). */
 async function handlePath({ method, path, query, body }) {
   const parts = path.split('/').filter(Boolean);
@@ -215,6 +265,9 @@ async function handlePath({ method, path, query, body }) {
 
   if (method === 'GET') {
     if (path.startsWith('/api/dashboard/summary')) return { status: 200, body: await dashboardSummary() };
+    if (path.startsWith('/api/dashboard/regional')) return { status: 200, body: await dashboardRegional() };
+    if (path.startsWith('/api/dashboard/kpi')) return { status: 200, body: await dashboardKpi() };
+    if (path.startsWith('/api/dashboard/workitems')) return { status: 200, body: await dashboardWorkitems({ query }) };
     if (path.startsWith('/api/dashboard/')) {
       const tally = await dashboardSummary();
       return { status: 200, body: { totalWorkItems: tally.totalWorkItems, activeWorkItems: tally.activeWorkItems, completedTotal: tally.completedThisMonth, overAllRate: tally.totalWorkItems ? Math.round((tally.completedThisMonth / tally.totalWorkItems) * 100) : 0 } };
@@ -247,4 +300,7 @@ module.exports = {
   updateResource,
   deleteResource,
   dashboardSummary,
+  dashboardRegional,
+  dashboardKpi,
+  dashboardWorkitems,
 };
