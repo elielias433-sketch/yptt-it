@@ -219,6 +219,14 @@
     @apply opacity-100;
   }
 
+  /* Zoom-on-click animation for clickable cards */
+  .zoom-card {
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+  }
+  .zoom-card:hover { transform: scale(1.02); box-shadow: 0 0 24px rgba(59,130,246,0.18); }
+  .zoom-card:active { transform: scale(0.97); }
+
   /* Alien Blue KPI Card */
   .kpi-card {
     @apply bg-alien-800/80 backdrop-blur-md border border-alien-500/30 rounded-card-lg shadow-glow-md p-6 relative overflow-hidden;

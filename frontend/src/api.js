@@ -108,6 +108,10 @@ class ApiClient {
     return this.request(`/api/sites/${encodeURIComponent(wid)}/related`);
   }
 
+  async getSiteFields() {
+    return this.request('/api/sites/fields');
+  }
+
   async createSite(data) {
     return this.request('/api/sites', {
       method: 'POST',
@@ -282,6 +286,11 @@ class ApiClient {
   async getDashboardSummary(params = {}) {
     const query = new URLSearchParams(params).toString();
     return this.request(`/api/dashboard/summary${query ? `?${query}` : ''}`);
+  }
+
+  async getDashboardSulawesi(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    return this.request(`/api/dashboard/sulawesi${query ? `?${query}` : ''}`);
   }
 
   async getProductivity(params = {}) {

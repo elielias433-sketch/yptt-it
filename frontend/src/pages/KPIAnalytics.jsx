@@ -13,6 +13,7 @@ import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Table, TableHeader, TableBody, TableRow, TableCell, TableHeaderCell, TablePagination } from '../components/ui/Table';
 import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Card as CardComponent, CardBody as CardBodyComponent, CardHeader as CardHeaderComponent } from '../components/ui/Card';
@@ -28,6 +29,7 @@ const [region, setRegion] = useState('All');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [programLimit, setProgramLimit] = useState(10);
+  const [activeDetail, setActiveDetail] = useState(null);
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['kpiSummary', { region, period }],
@@ -85,10 +87,13 @@ const [region, setRegion] = useState('All');
   const breakdownData = breakdown || { byRegion: {}, byProgram: {}, byStatus: {}, rows: [] };
   const breakdownRows = Array.isArray(breakdownData.rows) ? breakdownData.rows : [];
   const monthlyData = Array.isArray(breakdownData.monthly) ? breakdownData.monthly : [];
-  const trendLines = Array.isArray(trendsData) && trendsData.length > 0
-    ? trendsData.map((t) => ({ label: t.label || 'Series', color: t.color || '#3b82f6', data: Array.isArray(t.data) ? t.data : [] }))
-    : [];
-  const maxTrend = Math.max(1, ...trendLines.flatMap((l) => l.data || []));
+  const trendSeries = Array.isArray(trendsData.series) ? trendsData.series : (Array.isArray(trendsData) ? trendsData : []);
+  const trendMonths = Array.isArray(trendsData.months) && trendsData.months.length ? trendsData.months : [];
+  const trendLines = trendSeries
+    .map((t) => ({ label: t.label || 'Series', color: t.color || '#3b82f6', data: Array.isArray(t.data) ? t.data : [] }))
+    .filter((t) => t.data.length > 0);
+  // Per-series scale so WID Volume (ribuan) & Completion (%) both visible.
+  const serieScalers = trendLines.map((l) => Math.max(1, ...l.data));
   const programEntries = Object.entries(breakdownData.byProgram || {})
     .map(([program, p]) => ({ program, total: p.total || 0, active: p.active || 0, completed: p.completed || 0 }))
     .sort((a, b) => b.total - a.total);
@@ -211,7 +216,7 @@ const [region, setRegion] = useState('All');
           const value = meaningful ? rawValue : '–';
           const trendUp = stat.trendUp;
           return (
-            <div key={stat.name} className="stat-card" style={{ animationDelay: `${index * 40}ms` }}>
+            <div key={stat.name} className="stat-card zoom-card" style={{ animationDelay: `${index * 40}ms` }} onClick={() => setActiveDetail(stat)}>
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="text-caption font-medium text-alien-400 uppercase tracking-wide truncate">{stat.name}</p>
@@ -239,7 +244,7 @@ const [region, setRegion] = useState('All');
       {/* Charts & Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Trend Chart */}
-        <Card variant="elevated">
+        <Card variant="elevated" className="zoom-card" onClick={() => setActiveDetail({ name: 'Trend Analysis', key: 'trend' })}>
           <CardHeader>
             <div className="flex items-center justify-between">
               <h2 className="section-title">Trend Analysis</h2>
@@ -248,7 +253,7 @@ const [region, setRegion] = useState('All');
           </CardHeader>
           <CardBody>
             <div className="h-72 relative">
-              <svg className="w-full h-full" viewBox="0 0 600 280" preserveAspectRatio="none">
+              <svg className="w-full h-full" viewBox="0 0 600 280" preserveAspectRatio="xMidYMid meet">
                 <defs>
                   <linearGradient id="grid-lines" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#1e293b" stopOpacity="0.5"/>
@@ -257,42 +262,46 @@ const [region, setRegion] = useState('All');
                 </defs>
                 {/* Grid */}
                 <g stroke="#1e293b" strokeWidth="0.5" opacity="0.3">
-                  {[20,30,40,50,60,70,80].map((y,i) => (
+                  {[30,80,130,180,230].map((y,i) => (
                     <line key={i} x1="40" y1={y} x2="560" y2={y} />
                   ))}
-                  {[80,140,200,260,320,380,440,500,560].map((x,i) => (
-                    <line key={i} x1={x} y1="10" x2={x} y2="270" />
+                  {trendMonths.map((_, i) => (
+                    <line key={i} x1={40 + i * 104} y1="20" x2={40 + i * 104} y2="250" />
                   ))}
                 </g>
-                {/* Sample trend lines */}
                 {trendLines.length === 0 ? (
                   <text x="300" y="140" textAnchor="middle" fontSize="12" fill="#64748b">
                     Belum ada data tren untuk periode ini
                   </text>
-                ) : trendLines.map((line, idx) => (
-                  <g key={idx}>
-                    <path 
-                      d={`M40,${270 - ((line.data[0] || 0) / maxTrend) * 245} ${line.data.slice(1).map((v, i) => `L${40 + (i + 1) * 47.27},${270 - (v / maxTrend) * 245}`).join(' ')}`}
-                      stroke={line.color}
-                      strokeWidth="2"
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    {/* Area fill */}
-                    <path 
-                      d={['M40,270', ...line.data.map((v, i) => `L${40 + i * 47.27},${270 - (v / maxTrend) * 245}`), 'L560,270', 'Z'].join(' ')}
-                      fill={line.color}
-                      opacity="0.1"
-                    />
-                  </g>
-                ))}
-                {/* Labels */}
+                ) : trendLines.map((line, idx) => {
+                  const scale = serieScalers[idx] || 1;
+                  const step = trendMonths.length ? 104 : 104;
+                  const yv = (v) => 250 - (Math.min(1, (v / scale)) * 220);
+                  const path = line.data.map((v, i) => `${i === 0 ? 'M' : 'L'}${40 + i * step},${yv(v).toFixed(1)}`).join(' ');
+                  const area = ['M40,250', ...line.data.map((v, i) => `L${40 + i * step},${yv(v).toFixed(1)}`), 'L' + (40 + (line.data.length - 1) * step) + ',250', 'Z'].join(' ');
+                  return (
+                    <g key={idx}>
+                      {line.data.length > 1 && <path d={area} fill={line.color} opacity="0.08" />}
+                      <path d={path} fill="none" stroke={line.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                      {line.data.map((v, i) =>
+                        <circle key={i} cx={40 + i * step} cy={yv(v)} r="3.2" fill={line.color} stroke="#0c1222" strokeWidth="1" />
+                      )}
+                    </g>
+                  );
+                })}
+                {/* X labels (bulan nyata) */}
                 <g fontSize="10" fill="#64748b">
-                  {[0,2,4,6,8,10].map((m,i) => (
-                    <text key={i} x={40 + m * 47.27} y="285" textAnchor="middle" className="text-caption text-alien-500">
-                      {['Jan','Mar','May','Jul','Sep','Nov'][i]}
-                    </text>
+                  {trendMonths.map((m, i) => (
+                    <text key={i} x={40 + i * 104} y="268" textAnchor="middle">{m}</text>
+                  ))}
+                </g>
+                {/* Series legend */}
+                <g transform="translate(40, 14)" fontSize="10">
+                  {trendLines.map((l, i) => (
+                    <g key={i} transform={`translate(${i * 140}, 0)`}>
+                      <rect width="10" height="10" rx="2" fill={l.color} />
+                      <text x="14" y="9" fill="#cbd5e1">{l.label}</text>
+                    </g>
                   ))}
                 </g>
               </svg>
@@ -436,6 +445,57 @@ const [region, setRegion] = useState('All');
           </Table>
         </CardBody>
       </Card>
+
+      {/* KPI Card Detail Modal */}
+      <Modal
+        isOpen={!!activeDetail}
+        onClose={() => setActiveDetail(null)}
+        title={activeDetail ? activeDetail.name : ''}
+      >
+        <div className="pt-2 space-y-3">
+          {activeDetail && activeDetail.key === 'trend' ? (
+            <div className="space-y-3">
+              <p className="text-body-sm text-alien-400">Data bulanan dari workbook (6 bulan terakhir)</p>
+              <Table striped hoverable>
+                <TableHeader>
+                  <TableRow>
+                    <TableHeaderCell width="90">Bulan</TableHeaderCell>
+                    {trendLines.map((l, i) => <TableHeaderCell key={i} align="center">{l.label}</TableHeaderCell>)}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Array.from({ length: trendMonths.length }).map((_, mi) => (
+                    <TableRow key={mi}>
+                      <TableCell className="font-mono text-alien-300">{trendMonths[mi] || ('B' + (mi + 1))}</TableCell>
+                      {trendLines.map((l, i) => <TableCell key={i} align="center" className="font-mono text-alien-100">{l.data[mi] !== undefined ? l.data[mi].toLocaleString() : '–'}</TableCell>)}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <p className="text-display-sm font-bold text-alien-100">
+                  {typeof (activeDetail ? stats[activeDetail.key] : '') === 'number'
+                    ? (activeDetail && (stats[activeDetail.key] || 0).toLocaleString())
+                    : (activeDetail && stats[activeDetail.key])}
+                </p>
+                <Badge variant="info" size="sm">2026</Badge>
+              </div>
+              <p className="text-body-sm text-alien-400">{activeDetail && activeDetail.description}</p>
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                {Object.entries(breakdownData.byStatus || {}).map(([k, v]) => (
+                  <div key={k} className="p-3 rounded-xl bg-alien-900/60 border border-alien-500/20">
+                    <p className="text-caption text-alien-400">{k}</p>
+                    <p className="text-heading-md font-bold text-alien-100">{v}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

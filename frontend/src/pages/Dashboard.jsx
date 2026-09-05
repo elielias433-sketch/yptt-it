@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { api } from '../api';
 import { 
   BuildingOfficeIcon, 
@@ -19,6 +20,7 @@ import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Table, TableHeader, TableBody, TableRow, TableCell, TableHeaderCell, TablePagination } from '../components/ui/Table';
 import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
 import { format } from 'date-fns';
 
 const kpiCards = [
@@ -106,6 +108,151 @@ const regionalCards = [
   },
 ];
 
+const WILAYAH = [
+  { key: 'ternate', label: 'Ternate', color: '#3b82f6' },
+  { key: 'makassar', label: 'Makassar', color: '#10b981' },
+  { key: 'manado', label: 'Manado', color: '#06b6d4' },
+];
+
+function Legend({ sulawesiBlocks }) {
+  const list = WILAYAH.filter((w) => sulawesiBlocks.some((b) => b.key === w.key));
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      {list.map((w) => (
+        <span key={w.key} className="flex items-center gap-1.5 text-caption text-alien-300">
+          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: w.color }} />
+          {w.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function blockRows(blocks, key) {
+  const b = blocks.find((x) => x.key === key);
+  return (b && b.rows) || [];
+}
+
+function detailTitle(key, cards) {
+  const c = (cards || []).find((x) => x.key === key);
+  return c ? c.name : 'Detail';
+}
+
+function renderDetail(key, bd) {
+  const rows = Array.isArray((bd || {}).rows) ? bd.rows : [];
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        {Object.entries((bd || {}).byStatus || {}).map(([k, v]) => (
+          <div key={k} className="p-3 rounded-xl bg-alien-900/60 border border-alien-500/20">
+            <p className="text-caption text-alien-400">{k}</p>
+            <p className="text-heading-md font-bold text-alien-100">{v}</p>
+          </div>
+        ))}
+      </div>
+      <div>
+        <p className="text-caption text-alien-400 uppercase tracking-wide mb-2">Per Region</p>
+        {rows.length === 0 ? (
+          <p className="text-body-sm text-alien-500">Belum ada data rinci.</p>
+        ) : (
+          <div className="space-y-2">
+            {rows.map((r) => (
+              <div key={r.region} className="flex items-center justify-between text-body-sm">
+                <span className="text-alien-200">{r.region}</span>
+                <span className="font-mono text-alien-300">
+                  {r.completed.toLocaleString()}/{r.total.toLocaleString()} · {r.completionRate}%
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function num(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function SulawesiBarChart({ blocks }) {
+  const milestones = blockRows(blocks, 'ternate');
+  return (
+    <div className="space-y-3">
+      {milestones.map((m, i) => {
+        const maxAch = Math.max(1, ...WILAYAH.map((w) => num(blockRows(blocks, w.key)[i]?.ach)));
+        const plan = num(m.plan) || 1;
+        return (
+          <div key={i}>
+            <p className="text-caption text-alien-400 font-medium mb-1">{m.milestone}</p>
+            <div className="flex items-center gap-2">
+              {WILAYAH.map((w) => {
+                const row = blockRows(blocks, w.key)[i];
+                const ach = num(row?.ach);
+                return (
+                  <div key={w.key} className="flex-1">
+                    <div className="h-3 bg-alien-800 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${(ach / plan) * 100}%`, backgroundColor: w.color }} />
+                    </div>
+                    <p className="text-caption text-alien-500 mt-0.5">{ach.toLocaleString()}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SulawesiLineChart({ blocks }) {
+  const milestones = blockRows(blocks, 'ternate');
+  const n = Math.max(1, milestones.length);
+  const W = 560, H = 220;
+  const padL = 40, padR = 20, padT = 16, padB = 28;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const x = (i) => padL + (n === 1 ? innerW / 2 : (i / (n - 1)) * innerW);
+  const y = (p) => padT + innerH - (p / 100) * innerH;
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
+        {/* grid */}
+        {[0, 25, 50, 75, 100].map((p) => (
+          <line key={p} x1={padL} x2={W - padR} y1={y(p)} y2={y(p)} stroke="#1e293b" strokeWidth="0.5" opacity="0.5" />
+        ))}
+        {/* x labels */}
+        {milestones.map((m, i) => (
+          <text key={i} x={x(i)} y={H - 8} textAnchor="middle" fontSize="9" fill="#64748b">
+            {String(m.milestone || '').split(' ')[0]}
+          </text>
+        ))}
+        {/* lines */}
+        {WILAYAH.map((w) => {
+          const rows = blockRows(blocks, w.key);
+          const pts = rows.map((r, i) => {
+            const pc = parseFloat(String(r.pct || '0')) || 0;
+            return `${x(i).toFixed(1)},${y(pc).toFixed(1)}`;
+          });
+          const d = 'M' + pts.join(' L');
+          return (
+            <g key={w.key}>
+              <path d={d} fill="none" stroke={w.color} strokeWidth="2" opacity="0.9" strokeLinejoin="round" />
+              {pts.map((pt, i) => {
+                const [px, py] = pt.split(',').map(Number);
+                return <circle key={i} cx={px} cy={py} r="3" fill={w.color} stroke="#0c1222" strokeWidth="1" />;
+              })}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { data: summary, isLoading, error, refetch } = useQuery({
@@ -128,6 +275,23 @@ export default function Dashboard() {
     queryKey: ['recentWorkItems', { limit: 10 }],
     queryFn: () => api.getWorkItems({ limit: 10, sort: 'updatedAt', order: 'desc' }),
   });
+
+  const { data: sulawesiData } = useQuery({
+    queryKey: ['dashboardSulawesi'],
+    queryFn: () => api.getDashboardSulawesi(),
+  });
+  const sulawesiBlocks = ['sulawesi', 'makassar', 'manado', 'ternate']
+    .map((k) => ({ key: k, label: k.charAt(0).toUpperCase() + k.slice(1), rows: (sulawesiData && sulawesiData[k] && sulawesiData[k].rows) || [] }))
+    .filter((b) => b.rows.length > 0);
+
+  // Breakdown (status/program/region) for KPI card detail modal.
+  const { data: kpiBreak } = useQuery({
+    queryKey: ['dashboardBreakdown'],
+    queryFn: () => api.getKPIBreakdown(),
+  });
+  const activeDetailKey = useState(null);
+  const activeDetail = activeDetailKey[0];
+  const setActiveDetail = activeDetailKey[1];
 
   if (isLoading) {
     return (
@@ -226,7 +390,13 @@ export default function Dashboard() {
           const value = stats[stat.key] || 0;
           const trendUp = stat.trendUp;
           return (
-            <div key={stat.name} className="stat-card stagger-{index + 1}" style={{ animationDelay: `${index * 50}ms` }}>
+            <div
+              key={stat.name}
+              className="stat-card stagger-{index + 1} zoom-card"
+              style={{ animationDelay: `${index * 50}ms` }}
+              onClick={() => setActiveDetail(stat.key)}
+              role="button"
+            >
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <p className="text-body-sm font-medium text-alien-400">{stat.name}</p>
@@ -253,9 +423,11 @@ export default function Dashboard() {
       </div>
 
       {/* Regional Distribution & Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Left column: Regional Distribution + Sulawesi charts */}
+        <div className="space-y-6">
         {/* Regional Distribution */}
-        <Card variant="elevated" className="overflow-hidden">
+        <Card variant="elevated" className="overflow-hidden zoom-card" onClick={() => setActiveDetail('regional')}>
           <CardHeader>
             <div className="flex items-center justify-between">
               <h2 className="section-title">Regional Distribution</h2>
@@ -339,8 +511,39 @@ export default function Dashboard() {
           </CardBody>
         </Card>
 
+        {/* Kartu A — Bar Chart: Ach per Wilayah */}
+        {sulawesiBlocks.length > 0 && (
+          <Card variant="elevated">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <h2 className="section-title">Sulawesi Milestone · Ach per Wilayah</h2>
+                <Legend sulawesiBlocks={sulawesiBlocks} />
+              </div>
+            </CardHeader>
+            <CardBody className="p-4">
+              <SulawesiBarChart blocks={sulawesiBlocks} />
+            </CardBody>
+          </Card>
+        )}
+
+        {/* Kartu B — Line Chart: Achievement % */}
+        {sulawesiBlocks.length > 0 && (
+          <Card variant="elevated">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <h2 className="section-title">Achievement % per Milestone</h2>
+                <Legend sulawesiBlocks={sulawesiBlocks} />
+              </div>
+            </CardHeader>
+            <CardBody className="p-4">
+              <SulawesiLineChart blocks={sulawesiBlocks} />
+            </CardBody>
+          </Card>
+        )}
+        </div>
+
         {/* Recent Work Items */}
-        <Card variant="elevated" className="overflow-hidden">
+        <Card variant="elevated" className="overflow-hidden zoom-card" onClick={() => setActiveDetail('recent')}>
           <CardHeader>
             <div className="flex items-center justify-between">
               <h2 className="section-title">Recent Work Items</h2>
@@ -413,8 +616,58 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* Sulawesi Summary (Excel Dashboard) */}
+      {sulawesiBlocks.length > 0 && (
+        <Card variant="elevated" className="zoom-card" onClick={() => setActiveDetail('sulawesi')}>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h2 className="section-title">Sulawesi Milestone Summary</h2>
+              <Badge variant="info" size="sm">2026 · Jan–Agu</Badge>
+            </div>
+          </CardHeader>
+          <CardBody className="p-0">
+            <Table striped hoverable>
+              <TableHeader>
+                <TableRow>
+                  {sulawesiBlocks.map((b) => (
+                    <TableHeaderCell key={b.key}>{b.label}</TableHeaderCell>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <TableRow key={i}>
+                    {sulawesiBlocks.map((b) => {
+                      const row = b.rows[i];
+                      return (
+                        <TableCell key={b.key} className="py-2 align-top">
+                          {row ? (
+                            <div>
+                              <p className="text-body-xs text-alien-400 font-medium">{row.milestone}</p>
+                              <p className="text-body-sm font-semibold text-alien-100">
+                                {Number(row.ach || 0).toLocaleString()} <span className="text-caption text-alien-500">/ {Number(row.plan || 0).toLocaleString()}</span>
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <Badge variant={row.ach >= row.delta * 2 ? 'completed' : 'inprogress'} size="sm">{row.pct}</Badge>
+                                <span className="text-caption text-alien-500">Δ {Number(row.delta || 0).toLocaleString()}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-body-xs text-alien-600">–</span>
+                          )}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardBody>
+        </Card>
+      )}
+
       {/* KPI Trend Charts Area */}
-      <Card variant="elevated">
+      <Card variant="elevated" className="zoom-card" onClick={() => setActiveDetail('kpiTrend')}>
         <CardHeader>
           <h2 className="section-title">KPI Trends (Monthly)</h2>
         </CardHeader>
@@ -455,6 +708,75 @@ export default function Dashboard() {
           </div>
         </CardBody>
       </Card>
+
+      {/* KPI Card Detail Modal */}
+      <Modal
+        isOpen={activeDetail === 'regional' || activeDetail === 'recent' || activeDetail === 'sulawesi' || !!kpiCards.find((x) => x.key === activeDetail)}
+        onClose={() => setActiveDetail(null)}
+        title={
+          activeDetail === 'regional' ? 'Regional Distribution Detail'
+          : activeDetail === 'recent' ? 'Recent Work Items Detail'
+          : activeDetail === 'sulawesi' ? 'Sulawesi Milestone Summary'
+          : activeDetail === 'kpiTrend' ? 'KPI Trends (Monthly) Detail'
+          : detailTitle(activeDetail, kpiCards)
+        }
+      >
+        <div className="pt-2">
+          {activeDetail === 'regional' ? (
+            <div className="space-y-3">
+              {(regionalData ? [['Kalimantan', regionalData.kalimantan], ['Sulawesi', regionalData.sulawesi]] : []).map(([name, r]) => (
+                <div key={name} className="flex items-center justify-between text-body-sm">
+                  <span className="text-alien-200">{name}</span>
+                  <span className="font-mono text-alien-300">{(r?.workItems || 0).toLocaleString()} item · {(r?.active || 0)} aktif · {(r?.completed || 0)} selesai · {(r?.completionRate || 0)}%</span>
+                </div>
+              ))}
+            </div>
+          ) : activeDetail === 'recent' ? (
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+              {(Array.isArray(recentWorkItems) ? recentWorkItems : []).slice(0, 10).map((it) => (
+                <div key={it.wid} className="flex items-center justify-between gap-2 text-body-sm border-b border-alien-500/10 pb-2">
+                  <span className="font-mono text-alien-300 truncate">{it.wid}</span>
+                  <span className="text-alien-200 truncate">{it.siteName}</span>
+                  <Badge variant={String(it.status || '').toLowerCase().replace(' ', '_') || 'planning'}>{it.status}</Badge>
+                </div>
+              ))}
+            </div>
+          ) : activeDetail === 'sulawesi' ? (
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+              {sulawesiBlocks.map((b) => (
+                <div key={b.key}>
+                  <p className="text-body-sm font-semibold text-alien-100 mb-1">{b.label}</p>
+                  {b.rows.slice(0, 5).map((r) => (
+                    <div key={r.milestone} className="flex justify-between text-body-xs text-alien-400">
+                      <span>{r.milestone}</span>
+                      <span>{Number(r.ach || 0).toLocaleString()}/{Number(r.plan || 0).toLocaleString()} · {r.pct}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : activeDetail === 'kpiTrend' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                { label: 'WID Volume', value: stats.totalWorkItems, suffix: '', trend: '+12%' },
+                { label: 'Completion Rate', value: stats.completionRate, suffix: '%', trend: '+2.3%' },
+                { label: 'Avg TAT (days)', value: stats.avgTAT, suffix: 'd', trend: '-1.2d' },
+                { label: 'Material On-Time', value: stats.materialOnTime, suffix: '%', trend: '+5%' },
+              ].map((m) => (
+                <div key={m.label} className="p-3 rounded-xl bg-alien-900/60 border border-alien-500/20">
+                  <p className="text-caption text-alien-400">{m.label}</p>
+                  <p className="text-heading-md font-bold text-alien-100">
+                    {typeof m.value === 'number' ? m.value.toLocaleString() : (m.value || 0)}{m.suffix}
+                  </p>
+                  <Badge variant="info" size="sm" className="mt-1">{m.trend}</Badge>
+                </div>
+              ))}
+            </div>
+          ) : (
+            renderDetail(activeDetail, kpiBreak)
+          )}
+        </div>
+      </Modal>
     </div>
 );
 }
