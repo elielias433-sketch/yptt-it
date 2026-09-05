@@ -43,7 +43,7 @@ const RESOURCES = {
       assignmentDate: ['ASSIGNMENT DATE', 'Assignment Date'],
       monthlyTarget: ['Monthly Target'], monthlyAssignment: ['Monthly Assignment'],
       poYear: ['PO Year'], yearsAssigned: ['Years Assigned'],
-      remark: ['Remark', 'Remarks', 'REMARK'], zteZone: ['ZTE Zone', 'ZTE ZONE'],
+      remark: ['Remark', 'Remarks', 'REMARK'], zteZone: ['ZTE Zone', 'ZTE ZONE', 'Cluster', 'Branch'],
       partner: ['Partner Actual'],
     },
   },

@@ -89,17 +89,19 @@ async function listResource(resourceName, query = {}) {
   }
 
   const CONTROL = new Set(['limit', 'offset', 'page', 'sort', 'order', 'sortField', 'sortOrder', 'search', 'tab']);
-  // Explicit filters (region, status, workType, ...) with forgiving matching.
+  // Explicit filters (region, status, workType, zone, ...) with forgiving matching.
   for (const [k, v] of Object.entries(query)) {
     if (!v || CONTROL.has(k)) continue;
     const want = String(v).toLowerCase().trim();
     rows = rows.filter((r) => {
-      const val = String(r[k] === undefined ? '' : r[k]).toLowerCase();
+      // 'zone' query maps to zteZone field on each row.
+      const field = k === 'zone' ? 'zteZone' : k;
+      const val = String(r[field] === undefined ? '' : r[field]).toLowerCase();
       if (k === 'region') {
-        // KAL / SUL vs Kali / Sula / Sulawesi / etc.
         return want === 'kal' ? val.includes('kal') : val.includes('sul');
       }
-      if (!r[k] && ['status', 'workType'].includes(k)) return false;
+      if (!r[field] && ['status', 'workType'].includes(field)) return false;
+      if (k === 'zone') return val.includes(want);
       return val.includes(want);
     });
   }
@@ -107,7 +109,7 @@ async function listResource(resourceName, query = {}) {
   if (query.search) {
     const s = String(query.search).toLowerCase();
     rows = rows.filter((r) =>
-      ['wid', 'siteId', 'siteName', 'sow', 'workType', 'program'].some((f) =>
+      ['wid', 'siteId', 'siteName', 'sow', 'workType', 'program', 'zteZone'].some((f) =>
         r[f] !== undefined && String(r[f]).toLowerCase().includes(s)));
   }
   // Sorting
