@@ -39,8 +39,9 @@ export default function Teams() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState(null);
   const [formData, setFormData] = useState(initialForm);
+  const [cardDetail, setCardDetail] = useState(false);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['teams', { search }],
     queryFn: () => api.getTeams(),
   });
@@ -110,6 +111,18 @@ export default function Teams() {
     team.regionCity?.toLowerCase().includes(search.toLowerCase()) ||
     team.email?.toLowerCase().includes(search.toLowerCase())
   );
+
+  const countBy = (fn) => {
+    const map = {};
+    teams.forEach((t) => {
+      const k = fn(t) || 'Unknown';
+      map[k] = (map[k] || 0) + 1;
+    });
+    return map;
+  };
+  const byPosition = countBy((t) => t.position);
+  const byRegion = countBy((t) => t.regionCity);
+  const byTeam = countBy((t) => t.teamInfo);
 
   if (isLoading && !data) {
     return (
@@ -213,9 +226,14 @@ export default function Teams() {
           <h1 className="page-header-title">Teams</h1>
           <p className="page-header-subtitle">Manage team members and assignments</p>
         </div>
-        <Button onClick={openCreateDialog} leftIcon={<PlusIcon className="w-5 h-5" />}>
-          Add Team Member
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          <Button variant="outline" onClick={() => setCardDetail(true)} leftIcon={<UsersIcon className="w-5 h-5" />}>
+            Team Summary
+          </Button>
+          <Button onClick={openCreateDialog} leftIcon={<PlusIcon className="w-5 h-5" />}>
+            Add Team Member
+          </Button>
+        </div>
       </div>
 
       <Card className="mb-6">
@@ -232,7 +250,7 @@ export default function Teams() {
         </CardBody>
       </Card>
 
-      <Card variant="elevated" className="overflow-hidden">
+      <Card variant="elevated" className="overflow-hidden zoom-card" onClick={() => setCardDetail(!cardDetail)}>
         <Table striped hoverable>
           <TableHeader>
             <TableRow>
@@ -248,7 +266,7 @@ export default function Teams() {
           </TableHeader>
           <TableBody>
             {filteredTeams.map((team, index) => (
-              <TableRow key={team.id} clickable onClick={() => openEditDialog(team)}>
+              <TableRow key={team.id} clickable onClick={(e) => { e.stopPropagation(); openEditDialog(team); }}>
                 <TableCell className="text-alien-500 font-mono text-body-xs">{index + 1}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-3">
@@ -389,6 +407,43 @@ export default function Teams() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Card Detail Modal */}
+      <Modal
+        isOpen={cardDetail}
+        onClose={() => setCardDetail(false)}
+        title="Team Summary"
+      >
+        <div className="pt-2 space-y-4">
+          <div className="flex items-center gap-3">
+            <p className="text-display-sm font-bold text-alien-100">{teams.length.toLocaleString()}</p>
+            <Badge variant="info" size="sm">total member</Badge>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              ['By Position', byPosition],
+              ['By Region/City', byRegion],
+              ['By Team', byTeam],
+            ].map(([title, map]) => (
+              <div key={title} className="p-3 rounded-xl bg-alien-900/60 border border-alien-500/20">
+                <p className="text-caption text-alien-400 uppercase tracking-wide mb-2">{title}</p>
+                {Object.keys(map).length === 0 ? (
+                  <p className="text-body-sm text-alien-600">Belum ada data</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {Object.entries(map).map(([k, v]) => (
+                      <li key={k} className="flex items-center justify-between gap-2 text-body-sm">
+                        <span className="text-alien-200 truncate">{k}</span>
+                        <span className="font-mono text-alien-300 shrink-0">{v}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       </Modal>
     </div>
   );
