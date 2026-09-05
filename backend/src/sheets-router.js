@@ -47,27 +47,68 @@ function descriptorName(d) {
 // READ
 // ---------------------------------------------------------------------------
 
+/** Frontend response shapes: resource -> response key (wrapped { key, total }). */
+const RESPONSE_SHAPE = {
+  sites: 'sites',
+  materials: 'materials',
+  validations: 'validations',
+  workorders: 'workOrders',
+};
+
 async function listResource(resourceName, query = {}) {
   const desc = compat.resource(resourceName);
-  if (!desc) return { status: 404, body: { error: 'Unknown resource' } };
-
   let rows = [];
-  if (resourceName === 'sites') {
-    for (const d of siteTabs()) rows = rows.concat(await readCanonical(d));
-  } else {
-    rows = await readCanonical(desc);
+  if (desc) {
+    if (resourceName === 'sites') {
+      for (const d of siteTabs()) rows = rows.concat(await readCanonical(d));
+    } else {
+      rows = await readCanonical(desc);
+    }
   }
+  // 'workorders' / virtual resources have no tab -> empty list (compat frontend)
+  if (resourceName === 'workorders') rows = [];
 
-  // Filtering (case-insensitive partial match on query keys).
+  const CONTROL = new Set(['limit', 'offset', 'page', 'sort', 'order', 'sortField', 'sortOrder', 'search', 'tab']);
+  // Exact/partial filters (region, status, workType, ...)
   for (const [k, v] of Object.entries(query)) {
-    if (!v || k === 'limit' || k === 'offset' || k === 'sort' || k === 'order' || k === 'page') continue;
-    const key = v.toLowerCase();
+    if (!v || CONTROL.has(k)) continue;
+    const key = String(v).toLowerCase();
     rows = rows.filter((r) => (r[k] !== undefined && String(r[k]).toLowerCase().includes(key)));
   }
-
-  const offset = Number(query.offset || 0);
-  const limit = Number(query.limit || Math.max(rows.length, 20));
+  // Free-text search across important fields
+  if (query.search) {
+    const s = String(query.search).toLowerCase();
+    rows = rows.filter((r) =>
+      ['wid', 'siteId', 'siteName', 'sow', 'workType', 'program'].some((f) =>
+        r[f] !== undefined && String(r[f]).toLowerCase().includes(s)));
+  }
+  // Sorting
+  const sortField = String(query.sortField || query.sort || '').toLowerCase();
+  const sortOrder = String(query.sortOrder || query.order || 'asc').toLowerCase();
+  if (sortField && !['updatedat', 'period', 'createdat'].includes(sortField)) {
+    rows.sort((a, b) => {
+      const av = a[sortField];
+      const bv = b[sortField];
+      const an = Number(String(av || '').replace(/[^0-9.\-]/g, ''));
+      const bn = Number(String(bv || '').replace(/[^0-9.\-]/g, ''));
+      let cmp;
+      if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) cmp = an - bn;
+      else cmp = String(av || '').localeCompare(String(bv || ''));
+      return sortOrder === 'desc' ? -cmp : cmp;
+    });
+  }
+  // Pagination
+  const limit = Math.max(1, Number(query.limit || 20));
+  const page = Math.max(1, Number(query.page || 1));
+  const offset = query.offset !== undefined ? Number(query.offset) : (page - 1) * limit;
   const sliced = rows.slice(offset, offset + limit);
+
+  if (RESPONSE_SHAPE[resourceName]) {
+    const body = { [RESPONSE_SHAPE[resourceName]]: sliced, total: rows.length };
+    if (resourceName === 'validations') body.zones = ['Pare Pare', 'Makassar', 'Other'];
+    return { status: 200, body };
+  }
+  // teams / upgrades return a plain array
   return { status: 200, body: sliced };
 }
 
@@ -274,7 +315,8 @@ async function handlePath({ method, path, query, body }) {
     }
     const resourceName = parts[1];
     const id = parts[2];
-    if (!compat.resource(resourceName) && resourceName !== 'inbound' && resourceName !== 'lom') {
+    const KNOWN = new Set(['workorders', 'inbound', 'lom', 'ineom', 'inbound-return']);
+    if (!compat.resource(resourceName) && !KNOWN.has(resourceName)) {
       return { status: 404, body: { error: `Unknown resource: ${resourceName}` } };
     }
     if (id) return getResourceById(resourceName, id);
