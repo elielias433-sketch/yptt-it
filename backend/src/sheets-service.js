@@ -127,6 +127,7 @@ async function findRowsByValue(spreadsheetId, tab, columnIndex, value) {
 
 /** Patch cells on a specific sheet row (1-based). patch = [{col, value}]. */
 async function patchRow(spreadsheetId, tab, rowIndex, patch) {
+  if (!Array.isArray(patch) || patch.length === 0) return 0;
   const id = resolveSheetId(spreadsheetId);
   const colLetter = (c) => {
     let n = c;
@@ -134,15 +135,15 @@ async function patchRow(spreadsheetId, tab, rowIndex, patch) {
     while (n >= 0) { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; }
     return s;
   };
-  for (const { col, value } of patch) {
-    const range = `${tab}!${colLetter(col)}${rowIndex}`;
-    await getSheets().spreadsheets.values.update({
-      spreadsheetId: id,
-      range,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [[value]] },
-    });
-  }
+  // Single batchUpdate request (1 write request) touching only patched cells.
+  const data = patch.map(({ col, value }) => ({
+    range: `${tab}!${colLetter(col)}${rowIndex}`,
+    values: [[String(value === undefined ? '' : value)]],
+  }));
+  await getSheets().spreadsheets.values.batchUpdate({
+    spreadsheetId: id,
+    requestBody: { valueInputOption: 'USER_ENTERED', data },
+  });
   return patch.length;
 }
 

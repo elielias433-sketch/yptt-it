@@ -160,7 +160,13 @@ async function getResourceById(resourceName, id) {
       const idx = found[0] - 2;
       if (rows[idx]) {
         const canonical = compat.rowToCanonical(descriptorName(d), headers, rows[idx]);
-        return { status: 200, body: { ...exposeRows([{ ...canonical, _row: found[0] }])[0], tab: d.legacyTab, rowIndex: found[0] } };
+        // Build raw: full row keyed by every header (for full-column editing).
+        const raw = {};
+        headers.forEach((header, i) => {
+          const h = String(header || '').trim();
+          if (h !== '' && !/^no\.?$/i.test(h)) raw[h] = rows[idx][i] !== undefined ? rows[idx][i] : '';
+        });
+        return { status: 200, body: { ...exposeRows([{ ...canonical, _row: found[0] }])[0], tab: d.legacyTab, rowIndex: found[0], raw } };
       }
     }
   }
@@ -259,7 +265,28 @@ async function updateResource(resourceName, method, id, body = {}) {
 
   const allowedFields = Object.keys(desc.fieldMap);
   const cleanPatch = compat.buildUpdatePatch(dname, headers, body, allowedFields);
-  await svc.patchRow(process.env.SHEET_ID, desc.legacyTab, targetRow, cleanPatch);
+  // Support full-column editing: body.raw = { <header>: value } for every column.
+  if (body.raw && typeof body.raw === 'object') {
+    const idx = compat.headerIndexes(headers);
+    for (const [headerKey, val] of Object.entries(body.raw)) {
+      const col = idx[String(headerKey).toLowerCase().trim()];
+      if (col === undefined || col <= 0) continue; // skip index column, protect row
+      cleanPatch.push({ col, value: String(val === undefined ? '' : val) });
+    }
+  }
+  // Merge duplicate column patches (last value wins).
+  const merged = [];
+  const seen = new Set();
+  for (const p of cleanPatch) {
+    if (seen.has(p.col)) {
+      const old = merged.findIndex((m) => m.col === p.col);
+      merged[old] = p;
+    } else {
+      seen.add(p.col);
+      merged.push(p);
+    }
+  }
+  await svc.patchRow(process.env.SHEET_ID, desc.legacyTab, targetRow, merged);
 
   try {
     await svc.appendRow(process.env.SHEET_ID, '_AUDIT_LOG', [
