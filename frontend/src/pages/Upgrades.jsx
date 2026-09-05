@@ -7,7 +7,7 @@ import {
   PencilIcon,
   TrashIcon,
   BoltIcon,
-  PencilSquareIcon,
+  BuildingOfficeIcon,
 } from '@heroicons/react/24/outline';
 import { Card, CardBody } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -122,6 +122,20 @@ export default function Upgrades() {
     u.siteId?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const countBy = (fn) => {
+    const map = {};
+    upgrades.forEach((u) => {
+      const k = fn(u) || 'Unknown';
+      map[k] = (map[k] || 0) + 1;
+    });
+    return map;
+  };
+  const byWorkType = countBy((u) => u.workType);
+  const byAtp = countBy((u) => u.atp);
+  const byProductivity = countBy((u) => u.productivityStatus);
+
+  const [summaryOpen, setSummaryOpen] = useState(false);
+
   // Loading state
   if (isLoading && !data) {
     return (
@@ -180,9 +194,14 @@ export default function Upgrades() {
           <h1 className="page-header-title">PLN Upgrades</h1>
           <p className="page-header-subtitle">Manage PLN power upgrade projects</p>
         </div>
-        <Button onClick={openCreateDialog} leftIcon={<PlusIcon className="w-5 h-5" />}>
-          Add Upgrade
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          <Button variant="outline" onClick={() => setSummaryOpen(true)} leftIcon={<BuildingOfficeIcon className="w-5 h-5" />}>
+            Upgrade Summary
+          </Button>
+          <Button onClick={openCreateDialog} leftIcon={<PlusIcon className="w-5 h-5" />}>
+            Add Upgrade
+          </Button>
+        </div>
       </div>
 
       <Card className="mb-6">
@@ -199,7 +218,7 @@ export default function Upgrades() {
         </CardBody>
       </Card>
 
-      <Card variant="elevated" className="overflow-hidden">
+      <Card variant="elevated" className="overflow-hidden zoom-card">
         <Table striped hoverable>
           <TableHeader>
             <TableRow>
@@ -319,6 +338,44 @@ export default function Upgrades() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Upgrade Summary Modal */}
+      <Modal
+        isOpen={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+        title="Upgrade Summary"
+        size="lg"
+      >
+        <div className="pt-2 space-y-4">
+          <div className="flex items-center gap-3">
+            <p className="text-display-sm font-bold text-alien-100">{upgrades.length.toLocaleString()}</p>
+            <Badge variant="info" size="sm">total upgrades</Badge>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[
+              ['By Work Type', byWorkType],
+              ['By ATP Status', byAtp],
+              ['By Productivity', byProductivity],
+            ].map(([title, map]) => (
+              <div key={title} className="p-3 rounded-xl bg-alien-900/60 border border-alien-500/20">
+                <p className="text-caption text-alien-400 uppercase tracking-wide mb-2">{title}</p>
+                {Object.keys(map).length === 0 ? (
+                  <p className="text-body-sm text-alien-600">Belum ada data</p>
+                ) : (
+                  <ul className="space-y-1.5 max-h-64 overflow-y-auto">
+                    {Object.entries(map).map(([k, v]) => (
+                      <li key={k} className="flex items-center justify-between gap-2 text-body-sm">
+                        <span className="text-alien-200 truncate">{k}</span>
+                        <span className="font-mono text-alien-300 shrink-0">{v}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       </Modal>
     </div>
   );
