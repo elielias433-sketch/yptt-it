@@ -37,9 +37,68 @@ function resolveSiteTab(data) {
   return compat.resource(SUL);
 }
 
+/**
+ * Team List holds TWO stacked member tables side by side on the same rows:
+ *   left block  = columns A..H (header row 1): No, Name, Position, Kontak, Email,
+ *                 Region / City, Akun Iepms, Info Team            -> TERNATE team
+ *   right block = columns N..Y (header row 1): No, Name, Position, ID Card No.,
+ *                 Kontak, Email, Region / City, epms/iCenter, Ineom, Info Team,
+ *                 WAH, remarks                                     -> Makassar + Manado
+ * The single-header "last occurrence wins" mapping only ever saw the right block,
+ * silently dropping the whole TERNATE team. Read both blocks and merge.
+ */
+const TEAMS_RIGHT_START = 13; // column N (0-based)
+
+function leftTeamRow(row) {
+  const v = (i) => (row && row[i] !== undefined ? String(row[i]).trim() : '');
+  const name = v(1);
+  if (!name || name.toLowerCase() === 'name') return null;
+  return {
+    name,
+    position: v(2),
+    contact: v(3),
+    email: v(4),
+    regionCity: v(5),
+    iepmsAccount: v(6),
+    teamInfo: v(7),
+    _tab: 'Team List',
+  };
+}
+
+function rightTeamRow(row) {
+  const b = TEAMS_RIGHT_START;
+  const v = (i) => (row && row[b + i] !== undefined ? String(row[b + i]).trim() : '');
+  const name = v(1);
+  if (!name || name.toLowerCase() === 'name') return null;
+  return {
+    name,
+    position: v(2),
+    idCardNo: v(3),
+    contact: v(4),
+    email: v(5),
+    regionCity: v(6),
+    iepmsAccount: v(7),
+    teamInfo: v(9),
+    _tab: 'Team List',
+  };
+}
+
+function readTeamsRows(rows) {
+  const out = [];
+  rows.forEach((row, i) => {
+    const rowNum = i + 2;
+    const left = leftTeamRow(row);
+    if (left) out.push({ ...left, _row: 'L' + rowNum });
+    const right = rightTeamRow(row);
+    if (right) out.push({ ...right, _row: rowNum });
+  });
+  return out;
+}
+
 /** Read a tab via compat config and return canonical rows (tagged _tab, _row). */
 async function readCanonical(descriptor) {
   const { headers, rows } = await svc.readTab(process.env.SHEET_ID, descriptor.legacyTab);
+  if (descriptorName(descriptor) === 'teams') return readTeamsRows(rows);
   return rows.map((row, i) => ({
     ...compat.rowToCanonical(descriptorName(descriptor), headers, row),
     _tab: descriptor.legacyTab,
