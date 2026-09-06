@@ -4,21 +4,15 @@ import { useState } from 'react';
 import { api } from '../api';
 import { 
   BuildingOfficeIcon, 
-  UsersIcon, 
-  CubeTransparentIcon,
   CheckBadgeIcon,
   BoltIcon,
-  ArrowTrendingUpIcon,
   ClockIcon,
   TruckIcon,
-  WrenchIcon,
-  CalendarIcon,
-  MapPinIcon,
   ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { Table, TableHeader, TableBody, TableRow, TableCell, TableHeaderCell, TablePagination } from '../components/ui/Table';
+import { Table, TableHeader, TableBody, TableRow, TableCell, TableHeaderCell } from '../components/ui/Table';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { format } from 'date-fns';
@@ -78,33 +72,6 @@ const kpiCards = [
     trend: '+2.3%',
     trendUp: true,
     description: 'completion rate'
-  },
-];
-
-const regionalCards = [
-  { 
-    region: 'Kalimantan', 
-    key: 'kalimantan', 
-    icon: MapPinIcon,
-    color: 'blue',
-    stats: [
-      { label: 'Work Items', key: 'workItems' },
-      { label: 'Active', key: 'active' },
-      { label: 'Completed', key: 'completed' },
-      { label: 'Completion %', key: 'completionRate', suffix: '%' },
-    ]
-  },
-  { 
-    region: 'Sulawesi', 
-    key: 'sulawesi', 
-    icon: MapPinIcon,
-    color: 'emerald',
-    stats: [
-      { label: 'Work Items', key: 'workItems' },
-      { label: 'Active', key: 'active' },
-      { label: 'Completed', key: 'completed' },
-      { label: 'Completion %', key: 'completionRate', suffix: '%' },
-    ]
   },
 ];
 
@@ -181,7 +148,6 @@ function SulawesiBarChart({ blocks }) {
   return (
     <div className="space-y-3">
       {milestones.map((m, i) => {
-        const maxAch = Math.max(1, ...WILAYAH.map((w) => num(blockRows(blocks, w.key)[i]?.ach)));
         const plan = num(m.plan) || 1;
         return (
           <div key={i}>
@@ -259,11 +225,6 @@ export default function Dashboard() {
     queryKey: ['dashboardSummary'],
     queryFn: () => api.getDashboardSummary(),
     refetchInterval: 30000,
-  });
-
-  const { data: kpiData, isLoading: kpiLoading } = useQuery({
-    queryKey: ['kpiAnalytics'],
-    queryFn: () => api.getKPIAnalytics(),
   });
 
   const { data: regionalData } = useQuery({

@@ -26,8 +26,6 @@ export default function KPIAnalytics() {
 const queryClient = useQueryClient();
 const [region, setRegion] = useState('All');
   const [period, setPeriod] = useState('Last 30 days');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
   const [programLimit, setProgramLimit] = useState(10);
   const [activeDetail, setActiveDetail] = useState(null);
 
@@ -36,12 +34,12 @@ const [region, setRegion] = useState('All');
     queryFn: () => api.getKPISummary({ region: region !== 'All' ? region : '', period }),
   });
 
-  const { data: trends, isLoading: trendsLoading } = useQuery({
+  const { data: trends } = useQuery({
     queryKey: ['kpiTrends', { region, period }],
     queryFn: () => api.getKPITrends({ region: region !== 'All' ? region : '', period }),
   });
 
-  const { data: breakdown, isLoading: breakdownLoading } = useQuery({
+  const { data: breakdown } = useQuery({
     queryKey: ['kpiBreakdown', { region }],
     queryFn: () => api.getKPIBreakdown({ region: region !== 'All' ? region : '' }),
   });
@@ -176,9 +174,6 @@ const [region, setRegion] = useState('All');
       description: 'this month'
     },
   ];
-
-  const getTrendIcon = (up) => up ? '[UP]' : '[DOWN]';
-  const getTrendColor = (up) => up ? 'text-emerald-400' : 'text-red-400';
 
   return (
     <div className="section">

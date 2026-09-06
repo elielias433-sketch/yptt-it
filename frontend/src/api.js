@@ -309,11 +309,6 @@ class ApiClient {
     return this.request(`/api/dashboard/kpi${query ? `?${query}` : ''}`);
   }
 
-  async getKPIBreakdown(params = {}) {
-    const query = new URLSearchParams(params).toString();
-    return this.request(`/api/dashboard/kpi${query ? `?${query}` : ''}`);
-  }
-
   async getKPITrends(params = {}) {
     // Monthly time-series endpoint (/api/dashboard/kpi/trends).
     const query = new URLSearchParams(params).toString();

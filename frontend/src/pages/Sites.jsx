@@ -1,14 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { 
   MagnifyingGlassIcon, 
-  FunnelIcon,
   PlusIcon,
   ArrowPathIcon,
   ArrowDownTrayIcon,
-  ArrowUpTrayIcon,
   ViewColumnsIcon,
   BuildingOfficeIcon,
   PencilSquareIcon,
@@ -30,7 +28,6 @@ const zones = ['All', 'TERNATE', 'MAKASSAR', 'MANADO', 'KENDARI', 'PALU', 'PARE 
 const ZONE_OPTIONS = zones.filter((z) => z !== 'All');
 
 export default function Sites() {
-  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [region, setRegion] = useState('All');
   const [status, setStatus] = useState('All');
@@ -101,7 +98,7 @@ export default function Sites() {
         setEditForm(full.raw);
         return;
       }
-    } catch (e) { /* fallthrough */ }
+    } catch { /* fallthrough */ }
     setEditForm({
       siteId: site.siteId || '',
       siteName: site.siteName || '',
@@ -113,8 +110,6 @@ export default function Sites() {
       sow: site.sow || '',
     });
   };
-
-  const setEdit = (key) => (e) => setEditForm((f) => ({ ...f, [key]: e.target ? e.target.value : e }));
 
   const saveEdit = async (e) => {
     e.preventDefault();

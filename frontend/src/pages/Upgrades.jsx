@@ -4,10 +4,10 @@ import { api } from '../api';
 import {
   MagnifyingGlassIcon,
   PlusIcon,
-  PencilIcon,
   TrashIcon,
   BoltIcon,
   BuildingOfficeIcon,
+  PencilSquareIcon,
 } from '@heroicons/react/24/outline';
 import { Card, CardBody } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
