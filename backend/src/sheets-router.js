@@ -116,6 +116,25 @@ function descriptorName(d) {
   return null;
 }
 
+/** Sites may contain rows without a WID. Address them by 'SUL:<row>' / 'KAL:<row>'
+ *  (sheet row number from the site list `id` field). Returns null for anything else. */
+function parseRowAddress(id) {
+  const m = String(id || '').match(/^(SUL|KAL):(\d{1,8})$/i);
+  if (!m) return null;
+  const isKal = m[1].toUpperCase() === 'KAL';
+  return { dname: isKal ? 'sites_kal' : 'sites_sul', desc: compat.resource(isKal ? KAL : SUL), rowNum: Number(m[2]) };
+}
+
+/** Build raw = { <header>: value } from a row array (excl. index columns). */
+function buildRawRow(headers, row) {
+  const raw = {};
+  headers.forEach((header, i) => {
+    const h = String(header || '').trim();
+    if (h !== '' && !/^no\.?$/i.test(h)) raw[h] = row[i] !== undefined ? row[i] : '';
+  });
+  return raw;
+}
+
 // ---------------------------------------------------------------------------
 // READ
 // ---------------------------------------------------------------------------
@@ -261,12 +280,20 @@ async function getResourceById(resourceName, id) {
       if (rows[idx]) {
         const canonical = compat.rowToCanonical(descriptorName(d), headers, rows[idx]);
         // Build raw: full row keyed by every header (for full-column editing).
-        const raw = {};
-        headers.forEach((header, i) => {
-          const h = String(header || '').trim();
-          if (h !== '' && !/^no\.?$/i.test(h)) raw[h] = rows[idx][i] !== undefined ? rows[idx][i] : '';
-        });
+        const raw = buildRawRow(headers, rows[idx]);
         return { status: 200, body: { ...exposeRows([{ ...canonical, _row: found[0] }])[0], tab: d.legacyTab, rowIndex: found[0], raw } };
+      }
+    }
+  }
+  // Row-address fallback for sites without a WID (id = "SUL:42" / "KAL:42").
+  if (isSites) {
+    const addr = parseRowAddress(id);
+    if (addr) {
+      const { headers, rows } = await svc.readTab(process.env.SHEET_ID, addr.desc.legacyTab);
+      const idx = addr.rowNum - 2;
+      if (rows[idx]) {
+        const canonical = compat.rowToCanonical(addr.dname, headers, rows[idx]);
+        return { status: 200, body: { ...exposeRows([{ ...canonical, _row: addr.rowNum }])[0], tab: addr.desc.legacyTab, rowIndex: addr.rowNum, raw: buildRawRow(headers, rows[idx]) } };
       }
     }
   }
@@ -446,6 +473,15 @@ async function updateResource(resourceName, method, id, body = {}) {
     if (matches.length > 1) return { status: 409, body: { error: `Ambiguous: ${matches.length} rows match ${d.key}=${id}` } };
     return patchCanonicalRow(d, dname, body, matches[0], method, id, headers);
   }
+  // Row-address fallback for sites without a WID (id = "SUL:42" / "KAL:42").
+  if (resourceName === 'sites') {
+    const addr = parseRowAddress(id);
+    if (addr) {
+      const { rows } = await svc.readTab(process.env.SHEET_ID, addr.desc.legacyTab);
+      if (addr.rowNum < 2 || addr.rowNum > rows.length + 1) return { status: 404, body: { error: 'Not found' } };
+      return patchCanonicalRow(addr.desc, addr.dname, body, addr.rowNum, method, id);
+    }
+  }
   return { status: 404, body: { error: 'Not found' } };
 }
 
@@ -477,6 +513,14 @@ async function deleteResource(resourceName, id) {
     }
     if (matches.length) {
       return { status: 200, body: { deleted: true, tab: d.legacyTab, rows: matches } };
+    }
+  }
+  // Row-address fallback for sites without a WID (id = "SUL:42" / "KAL:42").
+  if (isSites) {
+    const addr = parseRowAddress(id);
+    if (addr) {
+      await svc.deleteRowRow(process.env.SHEET_ID, addr.desc.legacyTab, addr.rowNum);
+      return { status: 200, body: { deleted: true, tab: addr.desc.legacyTab, rowIndex: addr.rowNum } };
     }
   }
   return { status: 404, body: { error: 'Not found' } };

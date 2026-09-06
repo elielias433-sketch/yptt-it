@@ -92,10 +92,15 @@ export default function Sites() {
   const [editSearch, setEditSearch] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const rowKey = (site) =>
+    site.wid && String(site.wid).trim()
+      ? String(site.wid)
+      : `${String(site.region || 'SUL').toUpperCase()}:${site.id}`;
+
   const openEdit = async (site) => {
     setEditingSite(site);
     try {
-      const full = await api.getSite(site.wid);
+      const full = await api.getSite(rowKey(site));
       if (full && full.raw && Object.keys(full.raw).length) {
         setEditForm(full.raw);
         return;
@@ -119,7 +124,7 @@ export default function Sites() {
     setSaving(true);
     try {
       // Send the full edited row (header-keyed) so every column is updated.
-      await api.updateSite(editingSite.wid, { raw: editForm });
+      await api.updateSite(rowKey(editingSite), { raw: editForm });
       refetch();
       setEditingSite(null);
     } catch (err) {
@@ -132,7 +137,7 @@ export default function Sites() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await api.deleteSite(deleteTarget.wid);
+      await api.deleteSite(rowKey(deleteTarget));
       refetch();
       setDeleteTarget(null);
     } catch (err) {
@@ -403,7 +408,7 @@ export default function Sites() {
             </TableHeader>
             <TableBody>
               {sites.map((site, index) => (
-                <TableRow key={site.wid}>
+                <TableRow key={rowKey(site)}>
                   <TableCell className="text-alien-500 font-mono text-body-xs">{((page - 1) * pageSize) + index + 1}</TableCell>
                   <TableCell className="font-mono text-alien-300">{site.wid}</TableCell>
                   {showCol('siteId') && <TableCell className="font-mono text-alien-400">{site.siteId}</TableCell>}
@@ -539,7 +544,7 @@ export default function Sites() {
       >
         <div className="pt-2 space-y-4">
           <p className="text-body-md text-alien-200">
-            Yakin ingin menghapus site <span className="text-alien-100 font-semibold">{deleteTarget?.wid || ''}</span>? Tindakan ini permanen.
+            Yakin ingin menghapus site <span className="text-alien-100 font-semibold">{deleteTarget?.wid || deleteTarget?.siteId || '—'}</span>? Tindakan ini permanen.
           </p>
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancel</Button>
