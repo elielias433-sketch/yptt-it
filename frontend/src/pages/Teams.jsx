@@ -112,6 +112,11 @@ export default function Teams() {
     setSearch(draftSearch);
   };
 
+  // Region/City suggestions: existing cities + project cities (Ternate, Makassar, Manado).
+  const regionCityOptions = Array.from(new Set(
+    ['TERNATE', 'MAKASSAR', 'MANADO', ...teams.map((t) => t.regionCity).filter(Boolean).map((c) => String(c).trim())]
+  ));
+
   const filteredTeams = teams.filter(team =>
     team.name?.toLowerCase().includes(search.toLowerCase()) ||
     team.position?.toLowerCase().includes(search.toLowerCase()) ||
@@ -339,10 +344,11 @@ export default function Teams() {
             <Input
               label="Region/City *"
               required
+              list="region-city-options"
               value={formData.regionCity}
               onChange={(e) => setFormData({ ...formData, regionCity: e.target.value })}
               leftIcon={<MapPinIcon className="w-5 h-5" />}
-              placeholder="Region/City"
+              placeholder="Region/City (e.g. TERNATE)"
             />
             <Input
               label="IEPMS Account"
@@ -366,6 +372,11 @@ export default function Teams() {
               placeholder="ID card number"
             />
           </div>
+          <datalist id="region-city-options">
+            {regionCityOptions.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
           <div className="flex justify-end gap-3 pt-4 border-t border-alien-500/20">
             <Button variant="secondary" onClick={closeDialog}>Cancel</Button>
             <Button 
