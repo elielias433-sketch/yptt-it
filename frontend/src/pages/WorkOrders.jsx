@@ -9,6 +9,7 @@ import {
   DocumentTextIcon,
   ArrowDownTrayIcon,
   ArrowRightIcon,
+  BuildingOfficeIcon,
 } from '@heroicons/react/24/outline';
 import { Card, CardBody } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -16,6 +17,7 @@ import { Table, TableHeader, TableBody, TableRow, TableCell, TableHeaderCell, Ta
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
+import { Modal } from '../components/ui/Modal';
 import { format } from 'date-fns';
 
 const regions = ['All', 'KAL', 'SUL'];
@@ -43,6 +45,20 @@ export default function WorkOrders() {
   const workOrders = data?.workOrders || [];
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / pageSize);
+
+  const countBy = (fn) => {
+    const map = {};
+    workOrders.forEach((wo) => {
+      const k = fn(wo) || 'Unknown';
+      map[k] = (map[k] || 0) + 1;
+    });
+    return map;
+  };
+  const byRegion = countBy((wo) => wo.region);
+  const byStatus = countBy((wo) => wo.status);
+  const byProgram = countBy((wo) => wo.program);
+
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -158,9 +174,14 @@ export default function WorkOrders() {
           <h1 className="page-header-title">Work Orders</h1>
           <p className="page-header-subtitle">Manage work orders and assignments</p>
         </div>
-        <Button leftIcon={<PlusIcon className="w-5 h-5" />} onClick={() => navigate('/sites/new')}>
-          New Work Order
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          <Button variant="outline" onClick={() => setSummaryOpen(true)} leftIcon={<BuildingOfficeIcon className="w-5 h-5" />}>
+            Work Order Summary
+          </Button>
+          <Button leftIcon={<PlusIcon className="w-5 h-5" />} onClick={() => navigate('/sites/new')}>
+            New Work Order
+          </Button>
+        </div>
       </div>
 
       <Card className="mb-6">
@@ -203,7 +224,7 @@ export default function WorkOrders() {
         </CardBody>
       </Card>
 
-      <Card variant="elevated" className="overflow-hidden">
+      <Card variant="elevated" className="overflow-hidden zoom-card">
         <Table striped hoverable>
           <TableHeader>
             <TableRow>
@@ -251,6 +272,44 @@ export default function WorkOrders() {
           onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
         />
       </Card>
+
+      {/* Work Order Summary Modal */}
+      <Modal
+        isOpen={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+        title="Work Order Summary"
+        size="lg"
+      >
+        <div className="pt-2 space-y-4">
+          <div className="flex items-center gap-3">
+            <p className="text-display-sm font-bold text-alien-100">{total.toLocaleString()}</p>
+            <Badge variant="info" size="sm">total work orders</Badge>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[
+              ['By Region', byRegion],
+              ['By Status', byStatus],
+              ['By Program', byProgram],
+            ].map(([title, map]) => (
+              <div key={title} className="p-3 rounded-xl bg-alien-900/60 border border-alien-500/20">
+                <p className="text-caption text-alien-400 uppercase tracking-wide mb-2">{title}</p>
+                {Object.keys(map).length === 0 ? (
+                  <p className="text-body-sm text-alien-600">Belum ada data</p>
+                ) : (
+                  <ul className="space-y-1.5 max-h-64 overflow-y-auto">
+                    {Object.entries(map).map(([k, v]) => (
+                      <li key={k} className="flex items-center justify-between gap-2 text-body-sm">
+                        <span className="text-alien-200 truncate">{k}</span>
+                        <span className="font-mono text-alien-300 shrink-0">{v}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
