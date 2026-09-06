@@ -43,12 +43,6 @@ export default function Validations() {
 
   const [summaryOpen, setSummaryOpen] = useState(false);
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    setPage(1);
-    refetch();
-  };
-
   const getStatusBadge = (status) => {
     if (!status) return 'default';
     const s = status.toLowerCase();

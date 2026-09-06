@@ -14,8 +14,6 @@ export const Button = forwardRef(({
   type = 'button',
   ...props
 }, ref) => {
-  const baseStyles = 'inline-flex items-center justify-center gap-2 font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-alien-950 disabled:opacity-50 disabled:cursor-not-allowed';
-  
   const variants = {
     primary: 'bg-gradient-to-r from-alien-500 to-alien-600 text-white shadow-glow-sm hover:from-alien-400 hover:to-alien-500 hover:shadow-glow-md active:scale-[0.98]',
     secondary: 'bg-alien-800/50 backdrop-blur-sm border border-alien-500/30 text-alien-300 hover:bg-alien-700/50 hover:border-alien-400/50 hover:text-alien-100 hover:shadow-glow-sm active:scale-[0.98]',

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef } from 'react';
+import { Fragment, useCallback, useEffect } from 'react';
 import { Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 
@@ -24,22 +24,21 @@ export const Modal = ({
     full: 'max-w-[90vw]',
   };
   
-  const handleKeyDown = (e) => {
+  const handleKeyDown = useCallback((e) => {
     if (e.key === 'Escape' && closeOnEscape) {
       onClose();
     }
-  };
-  
+  }, [closeOnEscape, onClose]);
+
   useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
-    }
+    if (!isOpen) return undefined;
+    document.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-  }, [isOpen, closeOnEscape]);
+  }, [isOpen, handleKeyDown]);
 
   if (!isOpen) return null;
 

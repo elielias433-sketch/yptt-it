@@ -8,28 +8,11 @@ import {
   BuildingOfficeIcon,
   TagIcon,
   ChartBarIcon,
-  CalendarIcon,
-  UserIcon,
-  TruckIcon,
-  CheckBadgeIcon,
-  BoltIcon,
-  WrenchIcon,
-  ArrowRightIcon,
-  EllipsisVerticalIcon,
 } from '@heroicons/react/24/outline';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { format } from 'date-fns';
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return '--';
-  try {
-    return format(new Date(dateStr), 'MMM d, yyyy HH:mm');
-  } catch {
-    return dateStr;
-  }
-};
 
 const getStatusColor = (status) => {
   switch (status) {

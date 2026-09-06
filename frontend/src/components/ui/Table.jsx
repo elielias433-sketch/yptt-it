@@ -3,9 +3,9 @@ import { forwardRef } from 'react';
 export const Table = forwardRef(({
   children,
   className = '',
-  striped = true,
-  hoverable = true,
-  compact = false,
+  striped: _striped = true,
+  hoverable: _hoverable = true,
+  compact: _compact = false,
   ...props
 }, ref) => {
   return (
@@ -34,7 +34,7 @@ TableHeader.displayName = 'TableHeader';
 export const TableBody = forwardRef(({
   children,
   className = '',
-  striped = true,
+  striped: _striped = true,
   ...props
 }, ref) => (
   <tbody ref={ref} className={`divide-y divide-alien-500/10 ${className}`} {...props}>
@@ -46,7 +46,7 @@ TableBody.displayName = 'TableBody';
 
 export const TableRow = forwardRef(({
   children,
-  className = '',
+  className: _className = '',
   clickable = false,
   selected = false,
   ...props
@@ -72,7 +72,7 @@ TableRow.displayName = 'TableRow';
 
 export const TableCell = forwardRef(({
   children,
-  className = '',
+  className: _className = '',
   align = 'left',
   width,
   nowrap = false,
@@ -100,7 +100,7 @@ TableCell.displayName = 'TableCell';
 
 export const TableHeaderCell = forwardRef(({
   children,
-  className = '',
+  className: _className = '',
   align = 'left',
   width,
   sortable = false,

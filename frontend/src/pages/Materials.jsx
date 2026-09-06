@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
-import { 
-  MagnifyingGlassIcon,
-  FunnelIcon,
-} from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { Card, CardBody } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Table, TableHeader, TableBody, TableRow, TableCell, TableHeaderCell, TablePagination } from '../components/ui/Table';
@@ -51,12 +48,6 @@ export default function Materials() {
   const bySite = countBy((m) => m.siteName);
 
   const [summaryOpen, setSummaryOpen] = useState(false);
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    setPage(1);
-    refetch();
-  };
 
   const getTypeBadge = (type) => {
     switch (type) {

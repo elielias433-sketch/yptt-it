@@ -1,23 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
-import { 
-  MagnifyingGlassIcon,
-  CalendarIcon,
-  ArrowTrendingUpIcon,
-  ArrowDownTrayIcon,
-  DocumentChartBarIcon,
-  ArrowPathIcon,
-} from '@heroicons/react/24/outline';
+import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { Table, TableHeader, TableBody, TableRow, TableCell, TableHeaderCell, TablePagination } from '../components/ui/Table';
+import { Table, TableHeader, TableBody, TableRow, TableCell, TableHeaderCell } from '../components/ui/Table';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
-import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
-import { Card as CardComponent, CardBody as CardBodyComponent, CardHeader as CardHeaderComponent } from '../components/ui/Card';
-import { format } from 'date-fns';
 
 const regions = ['All', 'KAL', 'SUL'];
 const periods = ['All', 'Last 7 days', 'Last 30 days', 'Last 90 days', 'This year'];

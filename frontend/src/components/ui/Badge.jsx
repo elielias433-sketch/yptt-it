@@ -3,7 +3,7 @@ export const Badge = ({
   variant = 'default', 
   size = 'md',
   dot = false,
-  className = '',
+  className: _className = '',
   ...props 
 }) => {
   const variants = {

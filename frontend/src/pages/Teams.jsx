@@ -15,12 +15,10 @@ import {
 } from '@heroicons/react/24/outline';
 import { Card, CardBody } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { Table, TableHeader, TableBody, TableRow, TableCell, TableHeaderCell, TablePagination } from '../components/ui/Table';
+import { Table, TableHeader, TableBody, TableRow, TableCell, TableHeaderCell } from '../components/ui/Table';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
-import { Fragment } from 'react';
 
 const initialForm = {
   name: '',
@@ -175,50 +173,7 @@ export default function Teams() {
     );
   }
 
-  const renderEmptyState = () => (
-    <div className="section">
-      <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="page-header-title">Teams</h1>
-          <p className="page-header-subtitle">Manage team members and assignments</p>
-        </div>
-        <Button onClick={openCreateDialog} leftIcon={<PlusIcon className="w-5 h-5" />}>
-          Add Team Member
-        </Button>
-      </div>
-
-      <Card variant="elevated">
-        <CardBody>
-          <Table striped hoverable>
-            <TableHeader>
-              <TableRow>
-                <TableHeaderCell width="60">#</TableHeaderCell>
-                <TableHeaderCell>Team Member</TableHeaderCell>
-                <TableHeaderCell>Position</TableHeaderCell>
-                <TableHeaderCell>Contact</TableHeaderCell>
-                <TableHeaderCell>Email</TableHeaderCell>
-                <TableHeaderCell>Region/City</TableHeaderCell>
-                <TableHeaderCell>Team</TableHeaderCell>
-                <TableHeaderCell width="100">Actions</TableHeaderCell>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell colSpan={8} className="py-12 text-center text-alien-500">
-                  <div className="flex flex-col items-center gap-3">
-                    <UsersIcon className="w-12 h-12 text-alien-500/30" />
-                    <span className="text-body-md text-alien-400">No team members found</span>
-                  </div>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardBody>
-      </Card>
-    </div>
-  );
-
-  // Render teams table
+// Render teams table
   return (
     <div className="section">
       <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

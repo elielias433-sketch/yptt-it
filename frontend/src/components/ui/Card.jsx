@@ -3,7 +3,7 @@ import { forwardRef } from 'react';
 export const Card = forwardRef(({
   children,
   variant = 'default',
-  elevated = false,
+  elevated: _elevated = false,
   hoverable = false,
   className = '',
   ...props
