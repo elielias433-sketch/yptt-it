@@ -40,12 +40,13 @@ const initialForm = {
 export default function Upgrades() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [draftSearch, setDraftSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUpgrade, setEditingUpgrade] = useState(null);
   const [formData, setFormData] = useState(initialForm);
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['upgrades', { search }],
+    queryKey: ['upgrades'],
     queryFn: () => api.getUpgrades(),
   });
 
@@ -114,6 +115,11 @@ export default function Upgrades() {
     } else {
       createMutation.mutate(formData);
     }
+  };
+
+  const applySearch = (e) => {
+    e.preventDefault();
+    setSearch(draftSearch);
   };
 
   const filteredUpgrades = upgrades.filter(u =>
@@ -206,15 +212,20 @@ export default function Upgrades() {
 
       <Card className="mb-6">
         <CardBody className="p-4">
-          <div className="relative max-w-md">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-alien-500" />
-            <Input
-              placeholder="Search WID, Site Name, Site ID..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
-            />
-          </div>
+          <form onSubmit={applySearch} className="flex items-end gap-2">
+            <div className="relative flex-1 max-w-md">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-alien-500" />
+              <Input
+                placeholder="Search WID, Site Name, Site ID..."
+                value={draftSearch}
+                onChange={(e) => setDraftSearch(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Button variant="secondary" size="sm" type="submit" leftIcon={<MagnifyingGlassIcon className="w-4 h-4" />}>
+              Search
+            </Button>
+          </form>
         </CardBody>
       </Card>
 

@@ -34,13 +34,14 @@ const initialForm = {
 export default function Teams() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [draftSearch, setDraftSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState(null);
   const [formData, setFormData] = useState(initialForm);
   const [cardDetail, setCardDetail] = useState(false);
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['teams', { search }],
+    queryKey: ['teams'],
     queryFn: () => api.getTeams({ limit: 1000 }),
   });
 
@@ -104,6 +105,11 @@ export default function Teams() {
     } else {
       createMutation.mutate(formData);
     }
+  };
+
+  const applySearch = (e) => {
+    e.preventDefault();
+    setSearch(draftSearch);
   };
 
   const filteredTeams = teams.filter(team =>
@@ -196,15 +202,20 @@ export default function Teams() {
 
       <Card className="mb-6">
         <CardBody className="p-4">
-          <div className="relative max-w-md">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-alien-500" />
-            <Input
-              placeholder="Search team members..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
-            />
-          </div>
+          <form onSubmit={applySearch} className="flex items-end gap-2">
+            <div className="relative flex-1 max-w-md">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-alien-500" />
+              <Input
+                placeholder="Search team members..."
+                value={draftSearch}
+                onChange={(e) => setDraftSearch(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Button variant="secondary" size="sm" type="submit" leftIcon={<MagnifyingGlassIcon className="w-4 h-4" />}>
+              Search
+            </Button>
+          </form>
         </CardBody>
       </Card>
 

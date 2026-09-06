@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { 
@@ -29,6 +29,7 @@ const ZONE_OPTIONS = zones.filter((z) => z !== 'All');
 
 export default function Sites() {
   const [search, setSearch] = useState('');
+  const [draftSearch, setDraftSearch] = useState('');
   const [region, setRegion] = useState('All');
   const [status, setStatus] = useState('All');
   const [workType, setWorkType] = useState('All');
@@ -53,6 +54,7 @@ export default function Sites() {
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['sites', { search, region, status, workType, zone, page, pageSize, sortField, sortOrder }],
+    placeholderData: keepPreviousData,
     queryFn: () => api.getSites({ 
       search, 
       region: region !== 'All' ? region : '', 
@@ -154,8 +156,8 @@ export default function Sites() {
 
   const handleSearch = (e) => {
     e.preventDefault();
+    setSearch(draftSearch);
     setPage(1);
-    refetch();
   };
 
   const handleSort = (field) => {
@@ -274,8 +276,8 @@ export default function Sites() {
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-alien-500" />
               <Input
                 placeholder="Search WID, Site ID, Site Name..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={draftSearch}
+                onChange={(e) => setDraftSearch(e.target.value)}
                 className="pl-10"
               />
             </div>
@@ -312,10 +314,13 @@ export default function Sites() {
               />
             </div>
             <div className="flex gap-2">
+              <Button variant="secondary" size="sm" type="submit" leftIcon={<MagnifyingGlassIcon className="w-4 h-4" />}>
+                Search
+              </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => { setSearch(''); setRegion('All'); setStatus('All'); setWorkType('All'); setZone('All'); setPage(1); refetch(); }}
+                onClick={() => { setDraftSearch(''); setSearch(''); setRegion('All'); setStatus('All'); setWorkType('All'); setZone('All'); setPage(1); refetch(); }}
                 leftIcon={<ArrowPathIcon className="w-4 h-4" />}
               >
                 Reset

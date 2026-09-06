@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../api';
 import {
@@ -25,6 +25,7 @@ const statuses = ['All', 'Planning', 'In Progress', 'Completed', 'On Hold', 'Can
 export default function WorkOrders() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const [draftSearch, setDraftSearch] = useState('');
   const [region, setRegion] = useState('All');
   const [status, setStatus] = useState('All');
   const [page, setPage] = useState(1);
@@ -32,6 +33,7 @@ export default function WorkOrders() {
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['workOrders', { search, region, status, page, pageSize }],
+    placeholderData: keepPreviousData,
     queryFn: () => api.getWorkOrders({
       search,
       region: region !== 'All' ? region : '',
@@ -61,8 +63,8 @@ export default function WorkOrders() {
 
   const handleSearch = (e) => {
     e.preventDefault();
+    setSearch(draftSearch);
     setPage(1);
-    refetch();
   };
 
   const handleExport = () => {
@@ -190,8 +192,8 @@ export default function WorkOrders() {
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-alien-500" />
               <Input
                 placeholder="Search WID, Site ID, Site Name..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={draftSearch}
+                onChange={(e) => setDraftSearch(e.target.value)}
                 className="pl-10"
               />
             </div>
@@ -212,7 +214,10 @@ export default function WorkOrders() {
               />
             </div>
             <div className="flex gap-2">
-              <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setRegion('All'); setStatus('All'); setPage(1); refetch(); }} leftIcon={<ArrowPathIcon className="w-4 h-4" />}>
+              <Button variant="secondary" size="sm" type="submit" leftIcon={<MagnifyingGlassIcon className="w-4 h-4" />}>
+                Search
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => { setDraftSearch(''); setSearch(''); setRegion('All'); setStatus('All'); setPage(1); refetch(); }} leftIcon={<ArrowPathIcon className="w-4 h-4" />}>
                 Reset
               </Button>
               <Button variant="secondary" size="sm" onClick={handleExport} leftIcon={<ArrowDownTrayIcon className="w-4 h-4" />}>

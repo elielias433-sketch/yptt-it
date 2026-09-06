@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { api } from '../api';
 import { 
   MagnifyingGlassIcon,
@@ -15,12 +15,14 @@ import { BuildingOfficeIcon } from '@heroicons/react/24/outline';
 
 export default function Validations() {
   const [search, setSearch] = useState('');
+  const [draftSearch, setDraftSearch] = useState('');
   const [zone, setZone] = useState('All');
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['validations', { search, zone, page }],
+    placeholderData: keepPreviousData,
     queryFn: () => api.getValidations({ search, zone: zone !== 'All' ? zone : '', page, limit: pageSize }),
   });
 
@@ -42,6 +44,12 @@ export default function Validations() {
   const bySmAtp = countBy((v) => v.smAtpStatus);
 
   const [summaryOpen, setSummaryOpen] = useState(false);
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    setSearch(draftSearch);
+    setPage(1);
+  };
 
   const getStatusBadge = (status) => {
     if (!status) return 'default';
@@ -165,13 +173,13 @@ export default function Validations() {
 
       <Card className="mb-6">
         <CardBody className="p-4">
-          <form onSubmit={(e) => { e.preventDefault(); setPage(1); refetch(); }} className="space-y-4 md:space-y-0 md:flex md:items-end md:gap-4">
+          <form onSubmit={handleSearch} className="space-y-4 md:space-y-0 md:flex md:items-end md:gap-4">
             <div className="md:flex-1 min-w-[280px] relative">
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-alien-500" />
               <Input
                 placeholder="Search Site, Engineer, Zone..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={draftSearch}
+                onChange={(e) => setDraftSearch(e.target.value)}
                 className="pl-10"
               />
             </div>
@@ -182,6 +190,11 @@ export default function Validations() {
                 options={['All', ...zones].map(z => ({ value: z, label: z }))}
                 placeholder="Zone"
               />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" type="submit" leftIcon={<MagnifyingGlassIcon className="w-4 h-4" />}>
+                Search
+              </Button>
             </div>
           </form>
         </CardBody>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { api } from '../api';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { Card, CardBody } from '../components/ui/Card';
@@ -17,12 +17,14 @@ const types = ['All', 'inbound', 'return', 'lom'];
 
 export default function Materials() {
   const [search, setSearch] = useState('');
+  const [draftSearch, setDraftSearch] = useState('');
   const [type, setType] = useState('All');
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['materials', { search, type, page }],
+    placeholderData: keepPreviousData,
     queryFn: () => api.getMaterials({ 
       search, 
       type: type !== 'All' ? type : '', 
@@ -48,6 +50,12 @@ export default function Materials() {
   const bySite = countBy((m) => m.siteName);
 
   const [summaryOpen, setSummaryOpen] = useState(false);
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    setSearch(draftSearch);
+    setPage(1);
+  };
 
   const getTypeBadge = (type) => {
     switch (type) {
@@ -177,13 +185,13 @@ export default function Materials() {
 
       <Card className="mb-6">
         <CardBody className="p-4">
-          <form onSubmit={(e) => { e.preventDefault(); setPage(1); refetch(); }} className="space-y-4 md:space-y-0 md:flex md:items-end md:gap-4">
+          <form onSubmit={handleSearch} className="space-y-4 md:space-y-0 md:flex md:items-end md:gap-4">
             <div className="md:flex-1 min-w-[280px] relative">
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-alien-500" />
               <Input
                 placeholder="Search WID, Site Name, Material..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={draftSearch}
+                onChange={(e) => setDraftSearch(e.target.value)}
                 className="pl-10"
               />
             </div>
@@ -194,6 +202,11 @@ export default function Materials() {
                 options={types.map((t) => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))}
                 placeholder="Type"
               />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" type="submit" leftIcon={<MagnifyingGlassIcon className="w-4 h-4" />}>
+                Search
+              </Button>
             </div>
           </form>
         </CardBody>
