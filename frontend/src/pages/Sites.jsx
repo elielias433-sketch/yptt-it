@@ -345,7 +345,7 @@ export default function Sites() {
       </Card>
 
       {/* Sites Table */}
-      <Card variant="elevated" className="overflow-hidden zoom-card">
+      <Card variant="elevated" className="overflow-hidden">
         <CardBody className="p-0">
           <Table striped hoverable>
             <TableHeader>
