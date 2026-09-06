@@ -41,10 +41,13 @@ export default function Teams() {
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['teams', { search }],
-    queryFn: () => api.getTeams(),
+    queryFn: () => api.getTeams({ limit: 1000 }),
   });
 
-  const teams = data || [];
+  // Fetch all team rows (Sheet tab has extra blocks/blank rows); keep only real members.
+  const teams = (data || []).filter(
+    (t) => t && t.name && String(t.name).trim() !== '' && String(t.name).trim().toLowerCase() !== 'name'
+  );
 
   const createMutation = useMutation({
     mutationFn: api.createTeam,
