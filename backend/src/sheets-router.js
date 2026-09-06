@@ -366,33 +366,9 @@ async function createResource(resourceName, method, body = {}) {
   return { status: 201, body: { ...exposeRows([{ ...canonical, _row: rowIndex }])[0], tab: desc.legacyTab, rowIndex, created: true } };
 }
 
-async function updateResource(resourceName, method, id, body = {}) {
-  const isSites = resourceName === 'sites';
-  const desc = isSites ? resolveSiteTab(body) : compat.resource(resourceName);
-  if (!desc) return { status: 404, body: { error: 'Unknown resource' } };
-  const dname = descriptorName(desc);
-  if (!(desc.allowedOps || []).includes('UPDATE')) {
-    return { status: 403, body: { error: `Update is not allowed for ${resourceName}` } };
-  }
-  const key = desc.key;
-  const { headers } = await svc.readTab(process.env.SHEET_ID, desc.legacyTab);
-  let targetRow;
-  if (key) {
-    const keyCol = compat.canonicalToColumn(dname, key, headers);
-    if (keyCol < 0) return { status: 500, body: { error: 'Key column not found' } };
-    const matches = await svc.findRowsByValue(process.env.SHEET_ID, desc.legacyTab, keyCol, id);
-    if (matches.length === 0) return { status: 404, body: { error: 'Not found' } };
-    if (matches.length > 1) return { status: 409, body: { error: `Ambiguous: ${matches.length} rows match ${key}=${id}` } };
-    targetRow = matches[0];
-  } else {
-    // No stable key (teams/validations) -> id is the sheet row number.
-    const rowNum = Number(id);
-    if (!Number.isInteger(rowNum) || rowNum < 2) return { status: 400, body: { error: 'Invalid row id' } };
-    const total = (await svc.readTab(process.env.SHEET_ID, desc.legacyTab)).rows.length;
-    if (rowNum > total + 1) return { status: 404, body: { error: 'Not found' } };
-    targetRow = rowNum;
-  }
-
+/** Patch one row (sheet row number) in a descriptor's tab and return canonical. */
+async function patchCanonicalRow(desc, dname, body, targetRow, method, id, preHeaders) {
+  const headers = preHeaders || (await svc.readTab(process.env.SHEET_ID, desc.legacyTab)).headers;
   const allowedFields = Object.keys(desc.fieldMap);
   const cleanPatch = compat.buildUpdatePatch(dname, headers, body, allowedFields);
   // Support full-column editing: body.raw = { <header>: value } for every column.
@@ -423,7 +399,7 @@ async function updateResource(resourceName, method, id, body = {}) {
       new Date().toISOString(),
       String(body._actorUid || ''),
       String(body._actorEmail || ''),
-      `${method} ${resourceName}`,
+      `${method} ${dname}`,
       desc.legacyTab,
       String(id),
       '',
@@ -439,6 +415,38 @@ async function updateResource(resourceName, method, id, body = {}) {
   const idx = targetRow - 2;
   const canonical = rows[idx] ? compat.rowToCanonical(dname, headers, rows[idx]) : {};
   return { status: 200, body: { ...canonical, tab: desc.legacyTab, rowIndex: targetRow, updated: true } };
+}
+
+async function updateResource(resourceName, method, id, body = {}) {
+  const descs = resourceName === 'sites' ? siteTabs() : [compat.resource(resourceName)];
+  const first = descs[0];
+  if (!first) return { status: 404, body: { error: 'Unknown resource' } };
+
+  // Row-number addressing (no stable key: teams/validations).
+  if (resourceName !== 'sites' && !first.key) {
+    if (!(first.allowedOps || []).includes('UPDATE')) {
+      return { status: 403, body: { error: `Update is not allowed for ${resourceName}` } };
+    }
+    const rowNum = Number(id);
+    if (!Number.isInteger(rowNum) || rowNum < 2) return { status: 400, body: { error: 'Invalid row id' } };
+    const total = (await svc.readTab(process.env.SHEET_ID, first.legacyTab)).rows.length;
+    if (rowNum > total + 1) return { status: 404, body: { error: 'Not found' } };
+    return patchCanonicalRow(first, descriptorName(first), body, rowNum, method, id);
+  }
+
+  // Key-based addressing (sites sul+kal, materials, upgrades): try each descriptor.
+  for (const d of descs) {
+    if (!d.key || !(d.allowedOps || []).includes('UPDATE')) continue;
+    const dname = descriptorName(d);
+    const { headers } = await svc.readTab(process.env.SHEET_ID, d.legacyTab);
+    const keyCol = compat.canonicalToColumn(dname, d.key, headers);
+    if (keyCol < 0) continue;
+    const matches = await svc.findRowsByValue(process.env.SHEET_ID, d.legacyTab, keyCol, id);
+    if (matches.length === 0) continue;
+    if (matches.length > 1) return { status: 409, body: { error: `Ambiguous: ${matches.length} rows match ${d.key}=${id}` } };
+    return patchCanonicalRow(d, dname, body, matches[0], method, id, headers);
+  }
+  return { status: 404, body: { error: 'Not found' } };
 }
 
 /** DELETE — removes the matching row (admin-only, enforced upstream). */

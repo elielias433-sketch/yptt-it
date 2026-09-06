@@ -148,19 +148,39 @@ function rowToCanonical(resourceName, headers, row) {
   return out;
 }
 
-/** Build a legacy row (empty padded) for CREATE with only mapped fields set. */
+/** Build a legacy row (empty padded) for CREATE with only mapped fields set.
+ *  Accepts BOTH payload styles:
+ *   - raw header-keyed (UI sends e.g. { 'WID', 'Site Name Impl', ... })
+ *   - canonical-keyed (programmatic { wid, siteName, ... })
+ *  Returns {} for unknown headers (they stay blank).
+ */
 function buildCreateRow(resourceName, headers, data) {
   const r = resource(resourceName);
   const row = new Array(headers.length).fill('');
-  if (!r) return row;
+  if (!r || !data || typeof data !== 'object') return row;
+  const lower = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (v !== undefined && v !== null && String(v).trim() !== '') lower[String(k).toLowerCase().trim()] = v;
+  }
+  // Raw header-keyed payload: fill any column whose header appears in data.
+  headers.forEach((h, col) => {
+    const key = String(h || '').trim();
+    if (key === '') return;
+    const val = data[key] !== undefined ? data[key] : lower[key.toLowerCase()];
+    if (val !== undefined && val !== null && String(val).trim() !== '') row[col] = String(val);
+  });
+  // Canonical-keyed payload: map canonical fields through fieldMap aliases.
   for (const canonical of Object.keys(r.fieldMap)) {
     const col = canonicalToColumn(resourceName, canonical, headers);
     if (col < 0) continue;
-    row[col] = data[canonical] !== undefined ? String(data[canonical]) : '';
-  }
-  if (r.key && data[r.key] !== undefined) {
-    const keyCol = canonicalToColumn(resourceName, r.key, headers);
-    if (keyCol >= 0) row[keyCol] = String(data[r.key]);
+    let val = data[canonical];
+    if (val === undefined || String(val).trim() === '') {
+      for (const alias of r.fieldMap[canonical]) {
+        const aKey = String(alias).toLowerCase().trim();
+        if (lower[aKey] !== undefined) { val = lower[aKey]; break; }
+      }
+    }
+    if (val !== undefined && val !== null && String(val).trim() !== '') row[col] = String(val);
   }
   return row;
 }
